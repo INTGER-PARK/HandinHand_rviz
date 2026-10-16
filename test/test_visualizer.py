@@ -37,6 +37,49 @@ def test_attach_without_payload_never_invents_a_payload_pose(node):
 def test_outputs_never_command_a_vehicle(node):
     assert all(topic.startswith('/hih_viz/') for topic in node.publishers)
     assert all(not topic.endswith(('/cmd', '/input', '/admittance_enable')) for topic in node.publishers)
+    inputs = {sub.topic for sub in node.subscriptions}
+    assert inputs.isdisjoint(node.publishers)
+    assert not any(pub.cls in (ros.Cmd, ros.MinitroneState, ros.Wrench, ros.CenterOfPressure)
+                   for pub in node.publishers.values())
+
+
+def test_receiving_telemetry_only_publishes_visualization_and_reads_parameters(node):
+    # Deliver through every registered input, including command/force feedback.
+    for sub in node.subscriptions:
+        if sub.cls is ros.MinitroneState:
+            msg = state()
+        elif sub.cls is ros.Cmd:
+            msg = ros.Cmd(pos_cmd=[1., 2., 3.])
+        elif sub.cls is ros.Wrench:
+            msg = ros.Wrench(force=[-5., 0., 0.])
+        elif sub.cls is ros.CenterOfPressure:
+            msg = ros.CenterOfPressure(valid=True, y=.05, z=.03, normal_force=5.)
+        elif sub.cls is ros.Odometry:
+            msg = ros.Odometry()
+            msg.header.frame_id = 'world'
+            msg.pose.pose.orientation.w = 1.
+        elif sub.cls is ros.AccelStamped:
+            msg = ros.AccelStamped()
+            msg.header.frame_id = 'world'
+        else:  # Optional contact diagnostic is not a command input.
+            continue
+        sub.callback(msg)
+    for client in node.clients:
+        assert client.cls is ros.GetParameters
+        assert client.service.endswith('/get_parameters')
+        client.ready = True
+    node.poll_boundaries()
+    node.tick()
+    node.time += .1
+    node.tick()
+    node.clear_history(None, NS())
+    assert all(topic.startswith('/hih_viz/') for topic in node.publishers)
+    assert node.marker_pub.messages and node.tf.messages
+    assert all(transform.child_frame_id.startswith('hih_viz/') for transform in node.tf.messages)
+    assert len(node.services) == 1 and node.services[0].service == '~/clear_history'
+    for client in node.clients:
+        assert client.requests
+        assert all(request.names == ['safe_y_m', 'safe_z_m'] for request in client.requests)
 
 
 def test_body_omega_and_odom_twist_frame_are_correct(node):

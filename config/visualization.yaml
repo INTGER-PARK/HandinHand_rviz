@@ -8,12 +8,14 @@ hih_rviz:
     state_timeout_s: 0.7
     feedback_timeout_s: 0.7
     marker_lifetime_s: 0.4
-    drone_state_source: measured  # measured or ground_truth; payload always GT.
+    drone_state_source: measured  # Optional ground_truth requires an existing external publisher.
     # Cooperation high-fidelity sensor mode: a_W = R_WB * acc + gravity_world.
     # Use world_linear when the simulator's sensor model is disabled.
     acceleration_mode: body_specific_force
     gravity_world: [0.0, 0.0, -9.81]
     state_topic_template: /{role}/minitrone/state
+    # Optional INPUTS only. This package never starts a plant or exports its GT.
+    # Original HandinHand_sim 9b1e82e does not publish these GT topics.
     ground_truth_odom_topic_template: /hih/ground_truth/{role}/odometry
     ground_truth_acceleration_topic_template: /hih/ground_truth/{role}/acceleration
     command_topic_template: /{role}/minitrone/cmd

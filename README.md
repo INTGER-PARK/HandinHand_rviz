@@ -4,24 +4,37 @@ HandinHand_sim의 **Leader · Follower · Payload** 상태와 접촉을 RViz2에
 별도 ROS 2 Python 패키지입니다. Ubuntu 22.04 / ROS 2 Humble을 대상으로 작성했습니다.
 인터페이스 기준은 `INTGER-PARK/HandinHand_sim`의 **9b1e82e**입니다.
 
-시각화 노드는 상태와 피드백을 구독하여 `/hih_viz/*`와 TF만 발행합니다.
-기존 position/attitude command, admittance enable, actuator input에는 발행하지 않습니다.
-기존 시뮬레이터 저장소의 파일을 수정하지 않습니다.
+**이미 실행 중인 MuJoCo 시뮬레이터를 관찰하는 시각화 전용 패키지입니다.**
+기존 상태·명령·피드백을 구독하고 `/hih_viz/*`와 표시용 TF만 발행합니다.
+시뮬레이터, 제어기, admittance, allocator, observer, teleop, trajectory를 실행하지 않습니다.
+기존 position/attitude command, admittance enable, actuator input, 상태·힘 피드백 토픽에는
+발행하지 않으며, 원격 파라미터도 변경하지 않습니다. 기존 시뮬레이터 파일을 수정하지 않습니다.
+
+0.2.0부터 plant를 실행하던 `simulation.launch.py`/`hih_plant_telemetry`와 원본 입력 토픽에
+합성 데이터를 발행하던 `demo.launch.py`/`hih_visualization_demo`를 제거했습니다.
+실행 방법은 아래의 `visualization.launch.py` 하나입니다.
 
 ## 1. 무엇을 볼 수 있나요?
 
 | 항목 | Leader / Follower | Payload |
 | --- | --- | --- |
-| 위치·자세 | state 또는 선택한 GT, 3D 기체·Body 축·수치 | 동일 MuJoCo world의 GT, 3D 상자·Body 축·수치 |
+| 위치·자세 | 기존 state, 3D 기체·Body 축·수치 | 외부에서 payload odometry가 제공될 때 표시 |
 | 선속도 | World 화살표·수치 | World 화살표·수치 |
-| 선가속도 | IMU specific force를 World 선가속도로 변환 또는 World 입력 사용 | GT World 속도의 simulation-time 차분 |
+| 선가속도 | IMU specific force를 World 선가속도로 변환 또는 World 입력 사용 | 외부에서 World 가속도가 제공될 때 표시 |
 | 각속도 | Body 수치 + World로 회전한 화살표 | Body 수치 + World 화살표 |
 | 실제 궤적 | 측정/GT 위치의 이력 | GT 위치의 이력 |
 | 명령 궤적 | upstream `cmd`와 `cmd_admittance`를 각각 분리 | payload 목표 명령을 가정하지 않음 |
 | CoP | MoB 노란 점, Solver 청록 점; 각각 실제 판면에 표시 | 별도 payload CoP 추정기를 가정하지 않음 |
 | 판 경계 | 실제 판 외곽 + 실행 중인 CoP 제어기의 안전 경계 | 상자의 실제 외형 |
 | 힘·모멘트 | MoB 추정 렌치와 Solver 접촉 렌치 | 두 드론의 접촉 합력/모멘트와 각 면의 GT 렌치 |
-| solver 접촉점 | telemetry 래퍼 사용 시 선택적으로 표시 | 두 드론 판에서 표시 |
+| solver 접촉점 | 기존 contact_diagnostics 입력이 있을 때 선택적으로 표시 | 두 드론 판에서 표시 |
+
+**원본 HandinHand_sim 9b1e82e는 payload odometry/acceleration과 contact_diagnostics를
+토픽으로 발행하지 않습니다.** 따라서 기본 실행에서는 드론 상태·CoP·렌치를 표시하고,
+payload 자세가 필요한 3D 모델·벡터·궤적은 `waiting/stale`로 둡니다.
+두 드론 사이의 중간점으로 payload 상태를 가정하지 않습니다. Payload 전체 상태까지
+보려면 원본 plant 쪽에 실제 MjData를 읽어 내보내는 출력 전용 telemetry가 별도로 필요합니다.
+이 패키지는 해당 출력을 만들기 위해 plant를 대체하거나 추가 실행하지 않습니다.
 
 기체와 payload 형상은 **설치된 `hih_plant/xml/Cooperation.xml`을 직접 읽어 재사용**합니다.
 MuJoCo가 `Leader.xml` / `Follower.xml` / `contact_box.xml`의 include·재질·`fromto`·관절을
@@ -31,7 +44,7 @@ RViz 전용으로 따로 정한 기체 치수나 임의의 rotor 배치를 사�
 궤적·축·라벨에 사용하며, 기체 자체는 XML의 원래 재질 색상을 사용합니다.
 
 `state.servo`의 degrees를 radians로 변환해 네 서보 관절을 움직이며, GT 모드에서는
-새 `/hih/ground_truth/{role}/joint_states`의 실제 joint position [rad]을 사용합니다.
+외부 `/hih/ground_truth/{role}/joint_states` 입력의 실제 joint position [rad]을 사용합니다.
 이 값이 없거나 stale이면 서보 이하의 움직이는 부품을 숨기고 상태를 표시합니다.
 알 수 없는 관절 자세를 0도라고 가정하지 않습니다.
 
@@ -65,67 +78,25 @@ source install/setup.bash
 검증 버전은 MuJoCo 3.3.7입니다. 시뮬레이터가 이미 실행되는 동일 Python 환경을 사용하세요.
 시뮬레이터와 다른 컴퓨터라면 ROS_DOMAIN_ID, ROS_LOCALHOST_ONLY 및 DDS 네트워크 설정도 맞춥니다.
 
-## 3. 권장 실행: payload까지 모두 표시
+## 3. 실행: 기존 시뮬레이터에 붙이기
 
-기존 `cooperation_launch.py` 실행을 종료한 뒤 아래 launch로 **대체**합니다.
-
-```bash
-ros2 launch hih_rviz simulation.launch.py
-```
-
-이 launch는 기존 role-local controller/allocator/MoB와 **단 하나의 CooperationPlant**를
-실행합니다. Plant executable만 `hih_plant_telemetry`로 바꾸어, 같은 MjData의 GT를 추가 발행합니다.
-기본적으로 MuJoCo viewer와 CSV 기록은 끄고 RViz만 켭니다.
-
-MuJoCo viewer도 함께 보고, Follower admittance를 launch에서 켜려면:
-
-```bash
-ros2 launch hih_rviz simulation.launch.py \
-  viewer:=true embedded_admittance:=true admittance_enabled:=true
-```
-
-`embedded_admittance`는 **노드 실행 여부**, `admittance_enabled`는 그 노드의 **초기 ON/OFF**입니다.
-둘의 기본값은 false이며, admittance를 켜면 기존 auto approach가 작동할 수 있습니다.
-이 패키지는 trajectory 키 재입력이나 신호 지연에 따른 admittance OFF를 추가하지 않습니다.
-
-별도 터미널에서 기존 조작 도구를 그대로 사용합니다.
-
-```bash
-ros2 run hih_cmd hih_teleop
-# trajectory는 별도 터미널에서:
-ros2 run hih_cmd hih_trajectory
-```
-
-CoP attitude/translation, torque DOB 노드는 원래 cooperation launch와 마찬가지로 자동 실행하지 않습니다.
-실험에 필요한 노드만 기존 명령으로 실행하면 됩니다.
-
-| simulation launch 인자 | 기본값 | 의미 |
-| --- | --- | --- |
-| `viewer` | false | MuJoCo viewer 추가 |
-| `rviz` | true | RViz2 실행 |
-| `cop_touch` | false | 기존 4-touch 계산/발행; RViz에서는 사용하지 않음 |
-| `cop_solver` | true | Solver CoP 계산/발행 |
-| `embedded_admittance` | false | Follower admittance 노드 실행 |
-| `admittance_enabled` | false | 실행한 admittance 노드의 초기 enabled |
-| `record_data` | false | 기존 hih_logging recorder 실행 |
-| `log_output_dir` | 실행 디렉터리의 hih_recordings | CSV 저장 경로 |
-| `drone_state_source` | YAML 설정 | `measured` 또는 `ground_truth` |
-| `config` | 기본 visualization.yaml | 시각화 설정 파일 |
-
-기존 launch와 달리 viewer/기록/4-touch의 기본값을 위와 같이 정했습니다.
-기존 recorder의 topic registry에는 새 `/hih/ground_truth/*`가 등록되어 있지 않습니다.
-RViz를 나중에 재생하려면 아래 rosbag 안내에 따라 GT도 함께 기록하세요.
-
-## 4. 이미 실행 중인 시뮬레이터에 붙이기
+HandinHand_sim의 기존 launch와 실험 설정을 그대로 사용합니다.
+새 터미널에서 기존 simulator와 visualization workspace를 source한 뒤 실행합니다.
 
 ```bash
 ros2 launch hih_rviz visualization.launch.py
 ```
 
-이 모드는 **추가 물리 시뮬레이터를 시작하지 않습니다**. 드론의 기존 토픽을 바로 표시합니다.
-현재 HandinHand_sim main에는 payload odometry가 없으므로, 원래 plant만 실행했다면
-payload는 `waiting/stale`로 표시됩니다. 두 드론 사이의 중간점으로 payload를 추정해 그리지 않습니다.
-Payload 전체 상태가 필요하면 3번의 telemetry launch를 사용하세요.
+실행되는 노드는 `hih_visualizer`와 `rviz2`뿐입니다. 기존 MuJoCo viewer를 함께 켜도 됩니다.
+RViz 종료/재시작은 시각화 노드만 종료/재시작하며 plant와 제어 노드는 그대로 실행됩니다.
+
+| launch 인자 | 기본값 | 의미 |
+| --- | --- | --- |
+| `rviz` | true | RViz 창 실행; false이면 표시용 토픽만 발행 |
+| `config` | 기본 visualization.yaml | 시각화 설정 파일 |
+| `use_sim_time` | false | rosbag 등의 /clock 사용 여부 |
+| `drone_state_source` | YAML 설정(measured) | 기존 state 또는 이미 제공되는 ground_truth 입력 선택 |
+| `acceleration_mode` | YAML 설정(body_specific_force) | 기존 state.acc의 해석 |
 
 센서 모델을 꺼서 `state.acc`가 World 선가속도로 발행되는 실험에서는:
 
@@ -133,30 +104,38 @@ Payload 전체 상태가 필요하면 3번의 telemetry launch를 사용하세�
 ros2 launch hih_rviz visualization.launch.py acceleration_mode:=world_linear
 ```
 
-전체 GT를 기준으로 시각화하려면 telemetry launch에서:
+외부에서 동일한 실제 시뮬레이션의 GT 토픽을 이미 제공하는 경우에만:
 
 ```bash
-ros2 launch hih_rviz simulation.launch.py drone_state_source:=ground_truth
+ros2 launch hih_rviz visualization.launch.py drone_state_source:=ground_truth
 ```
 
 측정 상태 모드에서는 드론의 noise/delay가 포함된 pose로 해당 드론의 CoP/렌치를 그립니다.
 정밀한 GT geometry 비교에는 `ground_truth` 모드를 사용하세요.
 
-## 5. RViz만 빠르게 확인하는 데모
+## 4. 시각화가 제어에 개입하지 않는지 확인
 
-실제 simulator/teleop/trajectory를 종료한 별도 ROS domain에서 실행합니다.
-데모는 같은 입력 토픽에 **합성 데이터**를 발행하므로 실제 시뮬레이션과 함께 실행하지 않습니다.
+`cmd`/`cmd_admittance`는 **구독만** 하며, 받은 위치를 표시용 Path로 변환합니다.
+표시 설정·화살표 길이 제한·이력 삭제는 시각화 내부에만 적용됩니다.
+안전 경계는 CoP 제어 노드의 `/get_parameters` 서비스로 `safe_y_m`/`safe_z_m`만 조회합니다.
+`SetParameters` client나 enable/명령/actuator publisher를 만들지 않습니다.
+
+실행 후 실제 ROS graph에서도 확인할 수 있습니다.
 
 ```bash
-ROS_DOMAIN_ID=91 ros2 launch hih_rviz demo.launch.py
+ros2 node info /hih_rviz
+ros2 topic info /follower/minitrone/cmd --verbose
+ros2 topic info /follower/minitrone/cmd_admittance --verbose
+ros2 topic info /leader/minitrone/cmd --verbose
 ```
 
-이 모드는 물리 simulation과 flight controller를 실행하지 않습니다. 형상 해석용 MuJoCo 모듈과
-설치된 `hih_plant` XML, ROS 메시지용 `hih_interfaces`는 필요합니다.
-안전 경계는 실제 CoP 노드가 없으면 자동으로 그려지지 않습니다. 데모용 경계를 원하면
-아래 manual 경계 파라미터를 설정하세요.
+위 명령에서 `hih_rviz`는 command의 **SUBSCRIPTION** 항목에만 나타나야 합니다.
+시각화 출력은 `/hih_viz/*`와 자체 `hih_viz/...` frame의 `/tf`입니다.
+ROS 자체의 `/rosout`·`/parameter_events`도 있을 수 있으며 제어 입력은 아닙니다.
+기본 RViz Tools는 Interact/MoveCamera/Select이며 goal/pose 명령 도구는 넣지 않았습니다.
+ROS graph와 렌더링에 필요한 CPU·메모리·통신 비용은 추가됩니다.
 
-## 6. 좌표계·단위·힘의 의미
+## 5. 좌표계·단위·힘의 의미
 
 World는 MuJoCo의 오른손 Z-up 좌표입니다. RPY는 radians이며
 `R_WB = Rz(yaw) Ry(pitch) Rx(roll)`입니다. ROS quaternion은 **xyzw** 순서입니다.
@@ -190,13 +169,10 @@ Payload 각 face sensor는 payload 기준 Follower 면 `[-0.2,0,0]`, Leader 면 
 Leader face 축은 payload 축에서 yaw=pi 회전합니다. Payload의 두 면 렌치와 드론이 받는
 반작용 렌치는 부호/좌표계가 다르므로 같은 숫자로 해석하지 마세요.
 
-GT 가속도는 `mj_objectVelocity(..., mjOBJ_XBODY, ..., flg_local=0)`의 WORLD 속도를
-**simulation time**으로 차분합니다. 첫 샘플·같은 시간·reset·1초 초과 간격에서는 발행하지 않습니다.
-순간 qacc/새 IMU/독립 observer가 아니며 finite difference와 decimation 오차가 있습니다.
-원래 MjData를 읽고 기존 contact 계산 결과를 재사용합니다. 별도 mj_step/mj_forward는 호출하지 않습니다.
-읽기 lock/ROS 발행의 계산 비용은 추가되지만 제어 법칙이나 물리 파라미터를 바꾸지는 않습니다.
+선택 GT 가속도 입력은 World 성분의 `geometry_msgs/AccelStamped`입니다.
+시각화 노드가 물리 시뮬레이션의 qacc나 새 센서를 생성하지 않습니다.
 
-## 7. 화면과 설정 변경
+## 6. 화면과 설정 변경
 
 `config/visualization.yaml`이 시각화 기본값의 유일한 설정 파일입니다.
 `world_frame`, topic template, 표시 항목, 화살표 배율, 이력 길이를 여기서 수정합니다.
@@ -254,15 +230,15 @@ attitude와 translation의 경계가 다르면 각각 표시합니다. 노드가
 ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'
 ```
 
-## 8. 토픽
+## 7. 토픽
 
 `{role}`은 `leader` 또는 `follower`, `{body}`는 `leader/follower/payload`입니다.
 
 | 구독 입력 | 타입 | 필수 여부 |
 | --- | --- | --- |
 | `/{role}/minitrone/state` | hih_interfaces/MinitroneState | measured 드론 표시 |
-| `/hih/ground_truth/{body}/odometry` | nav_msgs/Odometry | payload 또는 GT 모드 |
-| `/hih/ground_truth/{body}/acceleration` | geometry_msgs/AccelStamped | GT 가속도 |
+| `/hih/ground_truth/{body}/odometry` | nav_msgs/Odometry | payload 또는 GT 모드; 외부 입력 필요 |
+| `/hih/ground_truth/{body}/acceleration` | geometry_msgs/AccelStamped | GT 가속도; 외부 입력 필요 |
 | `/hih/ground_truth/{role}/joint_states` | sensor_msgs/JointState | GT 모드의 네 servo position [rad] |
 | `/{role}/minitrone/cmd` | hih_interfaces/Cmd | upstream 경로, 선택 |
 | `/{role}/minitrone/cmd_admittance` | hih_interfaces/Cmd | admittance 출력 경로, 선택 |
@@ -270,7 +246,7 @@ ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'
 | `/{role}/minitrone/cop_solver_real` | hih_interfaces/CenterOfPressure | Solver CoP, 선택 |
 | `/{role}/minitrone/external_wrench_hat_second_order` | hih_interfaces/Wrench | 추정 렌치, 선택 |
 | `/{role}/minitrone/contact_wrench_real` | hih_interfaces/Wrench | Solver 렌치, 선택 |
-| `/{role}/minitrone/contact_diagnostics` | hih_interfaces/ContactDiagnostics | 선택 접촉점; 래퍼가 추가 발행 |
+| `/{role}/minitrone/contact_diagnostics` | hih_interfaces/ContactDiagnostics | 선택 접촉점; 외부 입력 필요 |
 | `/payload/contact_wrench_from_drones` | hih_interfaces/Wrench | payload 접촉 합력, 선택 |
 | `/payload/contact_wrench_from_{role}` | hih_interfaces/Wrench | payload 각 면 렌치, 선택 |
 
@@ -288,8 +264,8 @@ ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'
 | `/hih_viz/payload/wrench_contact` | geometry_msgs/WrenchStamped, payload Body/CoM |
 | `/tf` | world → hih_viz/{body}/base_link → drone contact/plate_center |
 
-`/hih/ground_truth/*` 및 새 contact diagnostics는 **plant telemetry 래퍼**의 출력입니다.
-그 외 `/hih_viz/*`와 TF는 visualizer의 출력입니다.
+이 패키지는 위 구독 입력을 발행하지 않습니다. `/hih/ground_truth/*`나 contact diagnostics를
+제공하는 외부 publisher가 없으면 해당 항목은 표시하지 않습니다.
 이 표의 경로는 미래의 전체 planned trajectory가 아니라 지금까지 발행된 명령의 이력입니다.
 controller 내부에서 합산되는 모든 CoP/attitude offset을 포함한 최종 desired pose라고 가정하지 않습니다.
 
@@ -299,14 +275,14 @@ controller 내부에서 합산되는 모든 CoP/attitude offset을 포함한 최
 같은 ROS 시간 기준을 사용해야 합니다. 기본 simulator는 /clock을 발행하지 않으므로
 일반 실행은 `use_sim_time=false`를 사용합니다.
 
-## 9. rosbag 재생
+## 8. rosbag 재생
 
-원본 headerless 입력과 payload GT를 함께 기록합니다. 작은 예시는 다음과 같습니다.
+원본 headerless 입력을 기록합니다. Payload GT가 별도로 제공된다면 해당 입력도 추가합니다.
+작은 예시는 다음과 같습니다.
 
 ```bash
 ros2 bag record -o hih_rviz_run \
   /leader/minitrone/state /follower/minitrone/state \
-  /hih/ground_truth/payload/odometry /hih/ground_truth/payload/acceleration \
   /leader/minitrone/cop_hat /follower/minitrone/cop_hat \
   /leader/minitrone/cop_solver_real /follower/minitrone/cop_solver_real \
   /leader/minitrone/external_wrench_hat_second_order \
@@ -324,7 +300,7 @@ ros2 launch hih_rviz visualization.launch.py use_sim_time:=true
 입력 토픽을 record 목록에 추가하세요. rosbag을 기록하면서 RViz 출력까지 기록했다면,
 재생할 때 visualizer와 같은 `/hih_viz/*`에 중복 발행하지 않게 하세요.
 
-## 10. 문제가 있을 때
+## 9. 문제가 있을 때
 
 ```bash
 ros2 topic echo /hih_viz/status
@@ -337,21 +313,21 @@ ros2 run tf2_ros tf2_echo world hih_viz/follower/base_link
 | 증상 | 확인할 내용 |
 | --- | --- |
 | 모든 표시가 없음 | ROS 환경 source, domain, Fixed Frame=world, `/hih_viz/status` |
-| payload만 없음 | 원래 cooperation plant에 attach했는지 확인; payload GT가 필요 |
+| payload만 없음 | 원본 9b1e82e에는 payload odometry가 없음; 외부 입력 전까지 waiting이 정상 |
 | CoP 점 없음 | 해당 source 발행, valid=true, normal_force>0 확인 |
 | 안전 사각형 없음 | CoP 노드 실행/이름/parameter service 확인; manual 기본은 숨김 |
 | 정지인데 가속도가 약 9.81 | acceleration_mode가 sensor model 모드와 맞는지 확인 |
-| GT 가속도만 잠깐 없음 | 첫 sample/물리 시간 정지/reset에서는 차분 미발행이 정상 |
+| GT 가속도 없음 | 외부 World AccelStamped publisher 또는 설정한 입력 토픽 확인 |
 | 과거 화살표가 없어짐 | stale timeout 또는 invalid 데이터에 따른 삭제가 정상 |
 | rviz2 package 없음 | ros-humble-rviz2 설치 또는 `rviz:=false`로 데이터 출력만 실행 |
 | `MJCF model unavailable` | `hih_plant` source, MuJoCo 모듈, `model_xml_path` 확인; 상태 overlay는 계속 동작 |
 | 모터/서보만 없음 | state.servo 또는 GT joint_states 수신/stale 여부 확인 |
 
-geometry/topic/frame이 원본 simulator에서 바뀌면 YAML도 맞추세요. `world_frame` 이름을 바꾸면
-RViz Fixed Frame과 GT exporter의 `telemetry_world_frame`도 같은 이름을 사용해야 하며,
+geometry/topic/frame이 원본 simulator에서 바뀌면 YAML도 맞추세요. `world_frame` 이름은
+RViz Fixed Frame과 외부 GT 입력의 frame_id에도 일치해야 합니다.
 이름 변경 자체가 좌표 회전을 수행하는 것은 아닙니다.
 
-## 11. 검증과 제한
+## 10. 검증과 제한
 
 ROS 없는 환경에서 실행 가능한 검사:
 
@@ -362,7 +338,8 @@ python3 -m pytest -q test
 
 검사는 frame math, facing-drone CoP 부호, tilted hover의 specific-force 변환,
 bounded history/reset, 실제 visualizer callback의 invalid/stale 삭제와 메시지 원점,
-live safety query, 실제 MuJoCo XBODY velocity 및 exporter의 단일-world 읽기를 확인합니다.
+조회 전용 safety query를 확인합니다. 전체 출력 토픽과 서비스 타입, launch/entry point를
+검사하여 제어 입력 발행 및 plant/제어기 실행 경로가 없는지도 확인합니다.
 MJCF 형상 검사는 native material/group 선택, capsule 끝점, 실제 servo FK, World 자세 결합과
 sensor noise 아래 geometry cache의 메모리 제한을 확인합니다. 원본 Cooperation.xml 기준으로도
 드론별 visible geom 48개(각각 RViz primitive 52개)의 위치·회전·크기 284개 조건을 확인했습니다.
@@ -371,9 +348,9 @@ MuJoCo가 없으면 그 라이브러리를 사용하는 검사만 skip합니다.
 
 개발 환경에서는 ROS 2/DDS 및 RViz GUI가 설치되어 있지 않아 전체 colcon build,
 실제 simulator와의 ROS topic 연결 및 RViz 렌더링은 아직 실행 검증하지 못했습니다.
-배포 후 5번 데모와 3번 실험 launch로 화면/연결을 확인하세요.
+배포 후 3번 시각화 launch와 4번 ROS graph 조회로 화면/연결을 확인하세요.
 
-## 12. 저장소와 업데이트
+## 11. 저장소와 업데이트
 
 이 패키지는 https://github.com/INTGER-PARK/HandinHand_rviz 에서 별도로 관리합니다.
 기존 `HandinHand_sim`과 독립된 저장소이며, simulator 설정 변경을 자동으로 가져오지 않습니다.
@@ -382,14 +359,19 @@ MuJoCo가 없으면 그 라이브러리를 사용하는 검사만 skip합니다.
 cd ~/ros2_project/hih_visualization_ws/src/HandinHand_rviz
 git pull --ff-only
 cd ~/ros2_project/hih_visualization_ws
+# 0.1.0을 설치한 적이 있다면 별도 visualization workspace의 기존 설치 산출물을
+# 먼저 제거합니다. 아래 두 경로는 기본 isolated install 기준이며 소스 폴더가 아닙니다.
+rm -rf build/hih_rviz install/hih_rviz
 colcon build --symlink-install --packages-select hih_rviz
 source install/setup.bash
 ```
 
 시뮬레이터 메시지·XML·좌표계가 변경되면 이 패키지의 입력 규약과 YAML도 확인하세요.
+기존 `simulation.launch.py`/`demo.launch.py`를 실행 중이었다면 해당 프로세스를 종료하고,
+원래 HandinHand_sim launch를 실행한 뒤 `visualization.launch.py`만 추가로 실행하세요.
 
 ## 참고
 
 - ROS Marker 형식: https://github.com/ros2/common_interfaces/blob/humble/visualization_msgs/msg/Marker.msg
 - ROS Odometry 좌표 규약: https://github.com/ros2/common_interfaces/blob/humble/nav_msgs/msg/Odometry.msg
-- MuJoCo object velocity: https://mujoco.readthedocs.io/en/3.3.7/APIreference/APIfunctions.html#mj-objectvelocity
+- MuJoCo kinematics: https://mujoco.readthedocs.io/en/3.3.7/APIreference/APIfunctions.html#mj-kinematics

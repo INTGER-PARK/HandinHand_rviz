@@ -12,8 +12,8 @@ from geometry_msgs.msg import AccelStamped, PoseStamped, TransformStamped, Vecto
 from hih_interfaces.msg import CenterOfPressure, Cmd, ContactDiagnostics, MinitroneState, Wrench
 from nav_msgs.msg import Odometry, Path
 from rcl_interfaces.msg import ParameterDescriptor
+from rcl_interfaces.srv import GetParameters
 from rclpy.node import Node
-from rclpy.parameter_client import AsyncParameterClient
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import JointState
 from std_msgs.msg import String
@@ -111,7 +111,9 @@ class HIHVisualizer(Node):
                             lambda msg, r=role: self.cache('payload', r, msg))
             for kind in ('attitude', 'translation'):
                 remote = self.cfg[f'cop_{kind}_node_template'].format(role=role)
-                self.safety_clients[(role, kind)] = AsyncParameterClient(self, remote)
+                # Only a GET client exists: no remote parameter write interface.
+                self.safety_clients[(role, kind)] = self.create_client(
+                    GetParameters, remote.rstrip('/') + '/get_parameters')
         self.subscriptions_owned.append(self.create_subscription(
             Wrench, self.cfg['payload_wrench_topic'],
             lambda msg: self.cache('payload', 'contact', msg), qos_profile_sensor_data))
@@ -120,7 +122,7 @@ class HIHVisualizer(Node):
         self.clear_service = self.create_service(Trigger, '~/clear_history', self.clear_history)
         self.safety_timer = self.create_timer(self.cfg['safety_poll_period_s'], self.poll_boundaries)
         self.timer = self.create_timer(1. / self.cfg['publish_rate_hz'], self.tick)
-        self.get_logger().info('RViz telemetry ready; outputs under ' + self.cfg['output_prefix'])
+        self.get_logger().info('Read-only visualization attached; outputs under ' + self.cfg['output_prefix'])
 
     def _validate_config(self):
         for key in ('publish_rate_hz', 'state_timeout_s', 'feedback_timeout_s',
@@ -248,12 +250,14 @@ class HIHVisualizer(Node):
 
     def poll_boundaries(self):
         for key, client in self.safety_clients.items():
-            if not client.services_are_ready():
+            if not client.service_is_ready():
                 self.boundaries.pop(key, None)
                 continue
             if key in self.pending and not self.pending[key].done():
                 continue
-            future = client.get_parameters(['safe_y_m', 'safe_z_m'])
+            request = GetParameters.Request()
+            request.names = ['safe_y_m', 'safe_z_m']
+            future = client.call_async(request)
             self.pending[key] = future
             future.add_done_callback(lambda done, k=key: self.receive_boundary(k, done))
 

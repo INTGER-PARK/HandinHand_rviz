@@ -106,23 +106,21 @@ def test_visualizer_uses_original_parts_and_state_servo_degrees(scene, monkeypat
     np.testing.assert_allclose(node.servo_angles['leader'][0], [.1, .2, .3, .4])
 
 
-def test_exporter_publishes_native_servo_joint_positions_without_changing_state(scene, monkeypatch):
-    import threading
-    ros.install(monkeypatch)
-    module = importlib.import_module('hih_rviz.plant_telemetry')
-    importlib.reload(module)
-    model = MJCFGeometry(scene, [0, 1, 2])
-    node = ros.Node('cooperation_plant')
-    node.model, node.data, node.lock = model.model, model.data, threading.Lock()
-    node.payload_body = model.roots['payload']
-    node.vehicles = [NS(label=role, base=model.roots[role], plate_payload_contact_sample=lambda: None)
-                     for role in ('leader', 'follower')]
-    for i, address in model.joints['follower']:
-        node.data.qpos[address] = .1*(i+1)
-    before = node.data.qpos.copy()
-    exporter = module.GroundTruthExporter(node, 30., 'world')
-    exporter.publish()
-    msg = node.publishers['/hih/ground_truth/follower/joint_states'].messages[-1]
-    assert msg.name == MJCFGeometry.servo_names('follower')
-    np.testing.assert_allclose(msg.position, [.1, .2, .3, .4])
-    np.testing.assert_array_equal(node.data.qpos, before)
+def test_geometry_uses_private_data_and_never_steps_physics(scene, monkeypatch):
+    # Fail if drawing ever starts a physics step, including during construction.
+    def forbid_dynamics(*args, **kwargs):
+        pytest.fail('The visualizer must never advance physics')
+
+    for name in ('mj_step', 'mj_step1', 'mj_step2', 'mj_forward'):
+        monkeypatch.setattr(mujoco, name, forbid_dynamics)
+    live_model = mujoco.MjModel.from_xml_path(str(scene))
+    live_data = mujoco.MjData(live_model)
+    live_data.qvel[:] = .3
+    before_qpos, before_qvel = live_data.qpos.copy(), live_data.qvel.copy()
+    display = MJCFGeometry(scene, [0, 1, 2])
+    assert display.model is not live_model and display.data is not live_data
+    display.parts('leader', [.1, .2, .3, .4])
+    display.parts('follower', [-.1, -.2, -.3, -.4])
+    np.testing.assert_array_equal(live_data.qpos, before_qpos)
+    np.testing.assert_array_equal(live_data.qvel, before_qvel)
+    assert display.data.time == live_data.time == 0.

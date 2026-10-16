@@ -1,7 +1,7 @@
 """Small recording ROS transport for CPU-only tests; never used by the package.
 
 Only ROS-generated messages/transport are replaced. Tests execute the real
-visualizer/exporter callbacks and real MuJoCo math where MuJoCo is installed.
+visualizer callbacks and real MuJoCo math where MuJoCo is installed.
 """
 import copy
 from concurrent.futures import Future
@@ -112,8 +112,8 @@ class CenterOfPressure:
 
 
 class Publisher:
-    def __init__(self, topic):
-        self.topic, self.messages = topic, []
+    def __init__(self, topic, cls):
+        self.topic, self.cls, self.messages = topic, cls, []
 
     def publish(self, msg):
         self.messages.append(copy.deepcopy(msg))
@@ -124,14 +124,14 @@ class Node:
 
     def __init__(self, name):
         self.name, self.time, self.publishers, self.parameters = name, 10., {}, {}
-        self.subscriptions, self.logs = [], []
+        self.subscriptions, self.logs, self.clients, self.services = [], [], [], []
 
     def declare_parameter(self, name, value, descriptor=None):
         self.parameters[name] = self.overrides.get(name, value)
         return NS(value=self.parameters[name])
 
     def create_publisher(self, cls, topic, qos):
-        pub = Publisher(topic)
+        pub = Publisher(topic, cls)
         self.publishers[topic] = pub
         return pub
 
@@ -140,8 +140,15 @@ class Node:
         self.subscriptions.append(sub)
         return sub
 
-    def create_service(self, *args):
-        return NS()
+    def create_client(self, cls, service):
+        client = ParameterReadClient(cls, service)
+        self.clients.append(client)
+        return client
+
+    def create_service(self, cls, service, callback):
+        result = NS(cls=cls, service=service, callback=callback)
+        self.services.append(result)
+        return result
 
     def create_timer(self, *args):
         return NS()
@@ -156,14 +163,22 @@ class Node:
         return NS(info=self.logs.append, warning=self.logs.append)
 
 
-class AsyncParameterClient:
-    def __init__(self, node, remote):
-        self.remote, self.ready, self.values = remote, False, [.1, .1]
+class GetParameters:
+    class Request:
+        def __init__(self):
+            self.names = []
 
-    def services_are_ready(self):
+
+class ParameterReadClient:
+    def __init__(self, cls, service):
+        self.cls, self.service, self.ready, self.values = cls, service, False, [.1, .1]
+        self.requests = []
+
+    def service_is_ready(self):
         return self.ready
 
-    def get_parameters(self, names):
+    def call_async(self, request):
+        self.requests.append(copy.deepcopy(request))
         future = Future()
         future.set_result(NS(values=[NS(type=3, double_value=v) for v in self.values]))
         return future
@@ -181,9 +196,9 @@ def install(monkeypatch):
     definitions = {
         'rclpy': {'init': lambda **kwargs: None, 'shutdown': lambda: None},
         'rclpy.node': {'Node': Node},
-        'rclpy.parameter_client': {'AsyncParameterClient': AsyncParameterClient},
         'rclpy.qos': {'qos_profile_sensor_data': object()},
         'rcl_interfaces.msg': {'ParameterDescriptor': Msg},
+        'rcl_interfaces.srv': {'GetParameters': GetParameters},
         'geometry_msgs.msg': {'Point': lambda: vector(), 'PoseStamped': PoseStamped,
                               'TransformStamped': TransformStamped, 'AccelStamped': AccelStamped,
                               'Vector3Stamped': Vector3Stamped, 'WrenchStamped': WrenchStamped},
