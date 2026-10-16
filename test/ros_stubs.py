@@ -68,6 +68,11 @@ class WrenchStamped:
         self.header, self.wrench = header(), NS(force=vector(), torque=vector())
 
 
+class JointState:
+    def __init__(self):
+        self.header, self.name, self.position = header(), [], []
+
+
 class Marker:
     ARROW, CUBE, SPHERE, CYLINDER, LINE_STRIP, TEXT_VIEW_FACING = 0, 1, 2, 3, 4, 9
     ADD, DELETE = 0, 2
@@ -183,6 +188,7 @@ def install(monkeypatch):
                               'TransformStamped': TransformStamped, 'AccelStamped': AccelStamped,
                               'Vector3Stamped': Vector3Stamped, 'WrenchStamped': WrenchStamped},
         'nav_msgs.msg': {'Odometry': Odometry, 'Path': Path},
+        'sensor_msgs.msg': {'JointState': JointState},
         'std_msgs.msg': {'String': Msg},
         'std_srvs.srv': {'Trigger': Msg},
         'tf2_ros': {'TransformBroadcaster': TransformBroadcaster},

@@ -23,8 +23,17 @@ HandinHand_sim의 **Leader · Follower · Payload** 상태와 접촉을 RViz2에
 | 힘·모멘트 | MoB 추정 렌치와 Solver 접촉 렌치 | 두 드론의 접촉 합력/모멘트와 각 면의 GT 렌치 |
 | solver 접촉점 | telemetry 래퍼 사용 시 선택적으로 표시 | 두 드론 판에서 표시 |
 
-기체 형상은 plate와 rotor를 사용하는 **간략 모델**입니다. MuJoCo mesh/servo 자세를
-그대로 가져오는 RobotModel은 아닙니다. Payload 외형과 접촉판 크기는 설정에서 바꿀 수 있습니다.
+기체와 payload 형상은 **설치된 `hih_plant/xml/Cooperation.xml`을 직접 읽어 재사용**합니다.
+MuJoCo가 `Leader.xml` / `Follower.xml` / `contact_box.xml`의 include·재질·`fromto`·관절을
+해석한 결과에서 프레임, 다리, 접촉판, 배터리, FC, 서보 케이스, 모터, 프로펠러 날개를 가져옵니다.
+RViz 전용으로 따로 정한 기체 치수나 임의의 rotor 배치를 사용하지 않습니다.
+각 geom의 실제 크기·Body 상대 위치/회전·RGBA를 유지합니다. 두 드론의 구분 색상은
+궤적·축·라벨에 사용하며, 기체 자체는 XML의 원래 재질 색상을 사용합니다.
+
+`state.servo`의 degrees를 radians로 변환해 네 서보 관절을 움직이며, GT 모드에서는
+새 `/hih/ground_truth/{role}/joint_states`의 실제 joint position [rad]을 사용합니다.
+이 값이 없거나 stale이면 서보 이하의 움직이는 부품을 숨기고 상태를 표시합니다.
+알 수 없는 관절 자세를 0도라고 가정하지 않습니다.
 
 ## 2. 빌드
 
@@ -38,7 +47,7 @@ source ~/ros2_project/HandinHand_sim/install/setup.bash
 
 sudo apt update
 sudo apt install ros-humble-rviz2 ros-humble-tf2-ros \
-  ros-humble-nav-msgs ros-humble-geometry-msgs ros-humble-visualization-msgs \
+  ros-humble-nav-msgs ros-humble-geometry-msgs ros-humble-sensor-msgs ros-humble-visualization-msgs \
   ros-humble-std-srvs python3-numpy python3-yaml
 
 mkdir -p ~/ros2_project/hih_visualization_ws/src
@@ -52,6 +61,8 @@ source install/setup.bash
 ```
 
 새 터미널에서도 `/opt/ros/humble`, 기존 simulator, visualization workspace 순서로 source합니다.
+형상 로딩에는 기존 simulator의 MuJoCo Python 모듈과 `hih_plant` XML이 필요합니다.
+검증 버전은 MuJoCo 3.3.7입니다. 시뮬레이터가 이미 실행되는 동일 Python 환경을 사용하세요.
 시뮬레이터와 다른 컴퓨터라면 ROS_DOMAIN_ID, ROS_LOCALHOST_ONLY 및 DDS 네트워크 설정도 맞춥니다.
 
 ## 3. 권장 실행: payload까지 모두 표시
@@ -140,7 +151,8 @@ ros2 launch hih_rviz simulation.launch.py drone_state_source:=ground_truth
 ROS_DOMAIN_ID=91 ros2 launch hih_rviz demo.launch.py
 ```
 
-이 모드는 MuJoCo와 flight controller를 실행하지 않지만, ROS 메시지용 `hih_interfaces`는 필요합니다.
+이 모드는 물리 simulation과 flight controller를 실행하지 않습니다. 형상 해석용 MuJoCo 모듈과
+설치된 `hih_plant` XML, ROS 메시지용 `hih_interfaces`는 필요합니다.
 안전 경계는 실제 CoP 노드가 없으면 자동으로 그려지지 않습니다. 데모용 경계를 원하면
 아래 manual 경계 파라미터를 설정하세요.
 
@@ -187,7 +199,8 @@ GT 가속도는 `mj_objectVelocity(..., mjOBJ_XBODY, ..., flg_local=0)`의 WORLD
 ## 7. 화면과 설정 변경
 
 `config/visualization.yaml`이 시각화 기본값의 유일한 설정 파일입니다.
-`world_frame`, topic template, 표시 항목, 크기, 화살표 배율, 이력 길이를 여기서 수정합니다.
+`world_frame`, topic template, 표시 항목, 화살표 배율, 이력 길이를 여기서 수정합니다.
+드론의 실제 부품 치수/배치는 simulator XML이 원본이며 YAML에서 별도로 재정의하지 않습니다.
 사용자 설정 파일을 따로 복사해 실행할 수도 있습니다.
 
 ```bash
@@ -213,6 +226,20 @@ MarkerArray의 namespace들도 개별 표시할 수 있습니다.
 Fixed Frame은 기본 `world`입니다. Body frame으로 바꾸면 궤적을 해석하기 어려워집니다.
 전체 상태가 겹쳐 보이면 `show_labels: false`로 수치를 숨기고 화살표/모델만 보세요.
 
+`model_xml_path`가 빈 문자열이면 source한 `hih_plant`의 `xml/Cooperation.xml`을 사용합니다.
+다른 MJCF를 사용하려면 이 값에 절대 경로를 지정하세요. 현재 body/joint 이름 규약은 유지해야 합니다.
+`model_geom_groups: [0, 1, 2]`는 MuJoCo viewer의 기본 표시 그룹과 같습니다.
+숨겨진 geom 그룹도 보려면 `[0, 1, 2, 3, 4, 5]`로 변경합니다.
+
+형상 변환용 별도 MjData에서는 `mj_kinematics`만 사용하며 물리 시간을 진행시키지 않습니다.
+Box / cylinder / sphere / ellipsoid를 RViz primitive로 옮기고, capsule은 같은 크기의
+원기둥과 양 끝 구로 표현합니다. 현재 원본 두 드론에 있는 모든 geom 형식을 지원합니다.
+새로 추가한 mesh/heightfield 등 미지원 형식은 경고에 이름을 남기며 임의의 상자로 대체하지 않습니다.
+RGBA는 MuJoCo의 native scene에서 해석한 값을 사용하지만 RViz와 MuJoCo의 조명·반사·그림자
+렌더러가 다르므로 화면의 음영까지 픽셀 단위로 같지는 않습니다.
+XML을 수정했다면 `hih_plant`를 rebuild/source하고 visualizer를 재시작하면 새 형상이 반영됩니다.
+CoP/렌치 overlay의 원점·판 크기 파라미터는 observer의 좌표계와 별도로 일치시켜야 합니다.
+
 안전 경계는 각 CoP 노드의 `safe_y_m` / `safe_z_m`를 2초마다 읽습니다.
 attitude와 translation의 경계가 다르면 각각 표시합니다. 노드가 없으면 값을 지어내지 않습니다.
 시각화용 manual 사각형이 필요한 경우에만 `manual_safety_half_y_m`와 `manual_safety_half_z_m`를
@@ -236,6 +263,7 @@ ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'
 | `/{role}/minitrone/state` | hih_interfaces/MinitroneState | measured 드론 표시 |
 | `/hih/ground_truth/{body}/odometry` | nav_msgs/Odometry | payload 또는 GT 모드 |
 | `/hih/ground_truth/{body}/acceleration` | geometry_msgs/AccelStamped | GT 가속도 |
+| `/hih/ground_truth/{role}/joint_states` | sensor_msgs/JointState | GT 모드의 네 servo position [rad] |
 | `/{role}/minitrone/cmd` | hih_interfaces/Cmd | upstream 경로, 선택 |
 | `/{role}/minitrone/cmd_admittance` | hih_interfaces/Cmd | admittance 출력 경로, 선택 |
 | `/{role}/minitrone/cop_hat` | hih_interfaces/CenterOfPressure | MoB CoP, 선택 |
@@ -316,6 +344,8 @@ ros2 run tf2_ros tf2_echo world hih_viz/follower/base_link
 | GT 가속도만 잠깐 없음 | 첫 sample/물리 시간 정지/reset에서는 차분 미발행이 정상 |
 | 과거 화살표가 없어짐 | stale timeout 또는 invalid 데이터에 따른 삭제가 정상 |
 | rviz2 package 없음 | ros-humble-rviz2 설치 또는 `rviz:=false`로 데이터 출력만 실행 |
+| `MJCF model unavailable` | `hih_plant` source, MuJoCo 모듈, `model_xml_path` 확인; 상태 overlay는 계속 동작 |
+| 모터/서보만 없음 | state.servo 또는 GT joint_states 수신/stale 여부 확인 |
 
 geometry/topic/frame이 원본 simulator에서 바뀌면 YAML도 맞추세요. `world_frame` 이름을 바꾸면
 RViz Fixed Frame과 GT exporter의 `telemetry_world_frame`도 같은 이름을 사용해야 하며,
@@ -333,6 +363,9 @@ python3 -m pytest -q test
 검사는 frame math, facing-drone CoP 부호, tilted hover의 specific-force 변환,
 bounded history/reset, 실제 visualizer callback의 invalid/stale 삭제와 메시지 원점,
 live safety query, 실제 MuJoCo XBODY velocity 및 exporter의 단일-world 읽기를 확인합니다.
+MJCF 형상 검사는 native material/group 선택, capsule 끝점, 실제 servo FK, World 자세 결합과
+sensor noise 아래 geometry cache의 메모리 제한을 확인합니다. 원본 Cooperation.xml 기준으로도
+드론별 visible geom 48개(각각 RViz primitive 52개)의 위치·회전·크기 284개 조건을 확인했습니다.
 ROS transport 대체물은 `test/ros_stubs.py` 안에서만 사용합니다.
 MuJoCo가 없으면 그 라이브러리를 사용하는 검사만 skip합니다.
 

@@ -29,8 +29,8 @@ def test_attach_without_payload_never_invents_a_payload_pose(node):
     node.on_state('follower', state())
     node.tick()
     markers = active_markers(node)
-    assert 'leader/model' in markers and 'follower/model' in markers
-    assert 'payload/model' not in markers
+    assert 'leader/state' in markers and 'follower/state' in markers
+    assert 'payload/state' not in markers
     assert 'payload: waiting/stale' in node.status_pub.messages[-1].data
 
 
@@ -63,7 +63,7 @@ def test_cop_invalid_and_stale_markers_are_deleted(node):
                for m in node.marker_pub.messages[-1].markers)
     node.time += 1.
     node.tick()
-    assert 'follower/model' not in active_markers(node)
+    assert 'follower/state' not in active_markers(node)
     assert node.publishers_by_role['follower']['path'].messages[-1].poses == []
 
 
@@ -92,7 +92,7 @@ def test_acceleration_is_gravity_corrected_and_nan_acc_keeps_pose(node):
     msg.acc[0] = math.nan
     node.on_state('follower', msg)
     node.tick()
-    assert 'follower/model' in active_markers(node)
+    assert 'follower/state' in active_markers(node)
     assert 'follower/acceleration' not in active_markers(node)
 
 
@@ -126,7 +126,7 @@ def test_payload_odom_twist_is_body_expressed(node):
     node.on_odometry('payload', msg)
     np.testing.assert_allclose(node.states['payload'].velocity_world, [0., 1., 0.], atol=1e-12)
     node.tick()
-    assert 'payload/model' in active_markers(node)
+    assert 'payload/state' in active_markers(node)
 
 
 def test_clock_reset_and_clear_history_service(node):

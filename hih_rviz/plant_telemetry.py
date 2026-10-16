@@ -10,6 +10,7 @@ import rclpy
 from geometry_msgs.msg import AccelStamped
 from hih_interfaces.msg import ContactDiagnostics
 from nav_msgs.msg import Odometry
+from sensor_msgs.msg import JointState
 
 from .core import VelocityDerivative, finite_vector, rotation
 from .markers import xyzw, xyz
@@ -22,6 +23,14 @@ class GroundTruthExporter:
         self.node, self.world_frame = node, world_frame
         self.bodies = {vehicle.label: vehicle.base for vehicle in node.vehicles}
         self.bodies['payload'] = node.payload_body
+        import mujoco
+        self.joint_states = {}
+        for role in ('leader', 'follower'):
+            names = [f'{role}_j_servo{i}' for i in range(1, 5)]
+            joints = [mujoco.mj_name2id(node.model, mujoco.mjtObj.mjOBJ_JOINT, name) for name in names]
+            if all(joint >= 0 for joint in joints):
+                self.joint_states[role] = (names, [int(node.model.jnt_qposadr[j]) for j in joints],
+                    node.create_publisher(JointState, f'/hih/ground_truth/{role}/joint_states', 2))
         self.derivatives = {role: VelocityDerivative() for role in self.bodies}
         self.publishers = {
             role: (node.create_publisher(Odometry, f'/hih/ground_truth/{role}/odometry', 2),
@@ -61,7 +70,16 @@ class GroundTruthExporter:
         with self.node.lock:
             snapshots = {role: body_snapshot(self.node.model, self.node.data, body_id)
                          for role, body_id in self.bodies.items()}
+            joints = {role: np.asarray(self.node.data.qpos[addresses]).tolist()
+                      for role, (_, addresses, _) in self.joint_states.items()}
         stamp = self.node.get_clock().now().to_msg()
+        for role, positions in joints.items():
+            if not np.isfinite(positions).all():
+                continue
+            msg = JointState()
+            msg.header.stamp = stamp
+            msg.name, msg.position = self.joint_states[role][0], positions
+            self.joint_states[role][2].publish(msg)
         for role, (sim_time, position, q, velocity_world) in snapshots.items():
             try:
                 if not math.isfinite(sim_time):

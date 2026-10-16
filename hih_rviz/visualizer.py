@@ -4,8 +4,10 @@ This node never publishes to a simulator command, admittance enable or actuator
 topic. Headerless hih_interfaces samples are stamped at visualization reception.
 """
 import math
+from pathlib import Path as FilePath
 import numpy as np
 import rclpy
+from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import AccelStamped, PoseStamped, TransformStamped, Vector3Stamped, WrenchStamped
 from hih_interfaces.msg import CenterOfPressure, Cmd, ContactDiagnostics, MinitroneState, Wrench
 from nav_msgs.msg import Odometry, Path
@@ -13,15 +15,17 @@ from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.parameter_client import AsyncParameterClient
 from rclpy.qos import qos_profile_sensor_data
+from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
 
 from .core import (BodyState, PathHistory, cop_world, finite_vector,
-                   quaternion_rpy, rotation,
+                   multiply_quaternions, quaternion_rpy, rotation,
                    rpy_from_quaternion, world_acceleration)
 from .markers import Markers, xyzw, xyz
+from .mjcf_geometry import MJCFGeometry
 from .parameters import defaults
 
 ROLES = ('leader', 'follower', 'payload')
@@ -37,6 +41,16 @@ class HIHVisualizer(Node):
             name, value, ParameterDescriptor(read_only=True)).value
                     for name, value in defaults().items()}
         self._validate_config()
+        self.geometry = None
+        if self.cfg['show_models']:
+            try:
+                xml = self.cfg['model_xml_path'] or str(
+                    FilePath(get_package_share_directory('hih_plant')) / 'xml/Cooperation.xml')
+                self.geometry = MJCFGeometry(xml, self.cfg['model_geom_groups'])
+                self.get_logger().info('Original simulator geometry: ' + self.geometry.xml_path)
+            except (ImportError, OSError, ValueError, RuntimeError, LookupError) as error:
+                self.get_logger().warning('Simulator geometry unavailable; overlays remain active: ' + str(error))
+        self.servo_angles = {}
         self.states, self.feedback, self.commands, self.gt_acceleration = {}, {}, {}, {}
         self.boundaries, self.pending, self.last_warning = {}, {}, {}
         self.previous_markers = set()
@@ -70,6 +84,9 @@ class HIHVisualizer(Node):
                                 lambda msg, r=role: self.on_odometry(r, msg))
                 self._subscribe(AccelStamped, 'ground_truth_acceleration_topic_template', role,
                                 lambda msg, r=role: self.on_acceleration(r, msg))
+                if role != 'payload':
+                    self._subscribe(JointState, 'ground_truth_joint_state_topic_template', role,
+                                    lambda msg, r=role: self.on_joint_state(r, msg))
             if role == 'payload':
                 continue
             for parameter, kind in (
@@ -135,6 +152,9 @@ class HIHVisualizer(Node):
                 raise ValueError(key + ' must be a nonempty TF frame without leading /')
         if not self.cfg['output_prefix'].startswith('/'):
             raise ValueError('output_prefix must be an absolute ROS topic prefix')
+        if not self.cfg['model_geom_groups'] or any(
+                not isinstance(group, int) or not 0 <= group <= 5 for group in self.cfg['model_geom_groups']):
+            raise ValueError('model_geom_groups must contain group indices in [0, 5]')
 
     def _subscribe(self, cls, parameter, role, callback):
         topic = self.cfg[parameter].format(role=role)
@@ -161,6 +181,10 @@ class HIHVisualizer(Node):
 
     def on_state(self, role, msg):
         try:
+            try:
+                self.servo_angles[role] = (np.deg2rad(finite_vector(msg.servo, 4)), self.seconds())
+            except (AttributeError, ValueError):
+                pass
             q = quaternion_rpy(msg.rpy)
             try:
                 acc = world_acceleration(msg.acc, q, self.cfg['acceleration_mode'], self.cfg['gravity_world'])
@@ -169,6 +193,13 @@ class HIHVisualizer(Node):
             self._accept_state(role, BodyState(msg.pos, q, msg.vel, msg.w_rpy, acc, self.seconds(), 'measured'))
         except ValueError:
             self.warn(role, role + ': invalid state ignored')
+
+    def on_joint_state(self, role, msg):
+        try:
+            values = [msg.position[msg.name.index(name)] for name in MJCFGeometry.servo_names(role)]
+            self.servo_angles[role] = (finite_vector(values, 4), self.seconds())
+        except (ValueError, IndexError):
+            self.warn(role + '_servo', role + ': invalid/missing GT servo joint positions')
 
     def on_odometry(self, role, msg):
         if msg.header.frame_id != self.cfg['world_frame']:
@@ -281,19 +312,15 @@ class HIHVisualizer(Node):
         R = rotation(q)
         world = lambda local: pos + R @ np.asarray(local)
         if self.cfg['show_models']:
-            if role == 'payload':
-                marks.shape(role + '/model', 0, Marker.CUBE, pos, q, self.cfg['payload_size_m'], color)
-            else:
-                marks.shape(role + '/model', 0, Marker.CUBE, pos, q, [.15, .15, .07], color)
-                half = self.cfg['plate_half_size_m']
-                for i, center in enumerate((self.cfg['plate_center_body_m'],
-                                            [-self.cfg['plate_center_body_m'][0], 0., 0.]), 1):
-                    marks.shape(role + '/model', i, Marker.CUBE, world(center), q,
-                                np.asarray(half)*2., (*color[:3], .25))
-                for i, (x, y) in enumerate(((-.14, -.14), (-.14, .14), (.14, -.14), (.14, .14)), 3):
-                    marks.line(role + '/arms', [pos, world([x, y, 0.])], color, .012, i)
-                    marks.shape(role + '/rotors', i, Marker.CYLINDER, world([x, y, .045]),
-                                q, [.14, .14, .006], (*color[:3], .55))
+            if self.geometry is not None:
+                cached = self.servo_angles.get(role)
+                servo = cached[0] if cached and 0. <= self.seconds()-cached[1] <= self.cfg['state_timeout_s'] else None
+                kinds = {'box': Marker.CUBE, 'sphere': Marker.SPHERE, 'cylinder': Marker.CYLINDER}
+                for part in self.geometry.parts(role, servo):
+                    marks.shape(role + '/model', part.marker_id, kinds[part.kind], world(part.position),
+                                multiply_quaternions(q, part.quaternion), part.scale, part.rgba)
+                if self.geometry.unsupported:
+                    self.warn('model_types', 'Unsupported MJCF geoms: ' + ', '.join(sorted(self.geometry.unsupported)))
         if self.cfg['show_axes']:
             for i, axis_color in enumerate(((1., .1, .1, 1.), (.1, 1., .1, 1.), (.1, .2, 1., 1.))):
                 marks.arrow(role + '/axes', pos, R[:, i], .16, .16, axis_color, i)
@@ -390,6 +417,7 @@ class HIHVisualizer(Node):
             self.feedback.clear()
             self.commands.clear()
             self.gt_acceleration.clear()
+            self.servo_angles.clear()
             for history in self.histories.values():
                 history.clear()
         self.last_tick_time = now
@@ -406,6 +434,10 @@ class HIHVisualizer(Node):
                     self.publish_path(role, kind, self.histories[(role, kind)], stamp, False)
                 continue
             status.append(role + ': ' + state.source)
+            if role != 'payload' and self.geometry is not None:
+                servo = self.servo_angles.get(role)
+                if not servo or not 0. <= now-servo[1] <= self.cfg['state_timeout_s']:
+                    status.append(role + ': servo waiting/stale (moving model parts hidden)')
             acc = state.acceleration_world
             gt_acc = self.gt_acceleration.get(role)
             if gt_acc and 0. <= now - gt_acc[1] <= self.cfg['feedback_timeout_s']:
@@ -446,6 +478,8 @@ class HIHVisualizer(Node):
         if transforms:
             self.tf.sendTransform(transforms)
         status_text = ' | '.join(status)
+        if self.cfg['show_models'] and self.geometry is None:
+            status_text += ' | MJCF model unavailable'
         marks.text('legend', [0., 0., 2.5], status_text +
                    '\nCoP/F: yellow=MoB cyan=solver | v=green a=red omega=purple', WHITE, .05)
         output, self.previous_markers = marks.finish(self.previous_markers)

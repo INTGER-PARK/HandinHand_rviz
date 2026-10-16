@@ -31,7 +31,9 @@ hih_rviz:
     # Zero hides a manual boundary. Prefer the live controller parameters above.
     manual_safety_half_y_m: 0.0
     manual_safety_half_z_m: 0.0
-    # Geometry snapshot: HandinHand_sim 9b1e82e. Change if its XML/frame offsets change.
+    # CoP/wrench OVERLAY frame snapshot: HandinHand_sim 9b1e82e.
+    # These do not define the drone model: model geometry comes from MJCF below.
+    # Match these to observer/contact frames if the simulator's XML offsets change.
     plate_center_body_m: [0.212, 0.0, 0.0]
     plate_half_size_m: [0.003, 0.2, 0.19]
     contact_face_center_body_m: [0.215, 0.0, 0.0]
@@ -48,6 +50,11 @@ hih_rviz:
     moment_scale: 0.2               # m / (N*m)
     max_arrow_length_m: 1.2
     show_models: true
+    # Empty path resolves hih_plant/xml/Cooperation.xml from the sourced simulator.
+    # All original primitive geoms, materials and native servo kinematics are used.
+    model_xml_path: ""
+    model_geom_groups: [0, 1, 2]  # MuJoCo viewer's default visible geom groups.
+    ground_truth_joint_state_topic_template: /hih/ground_truth/{role}/joint_states
     show_axes: true
     show_labels: true
     show_kinematics: true
