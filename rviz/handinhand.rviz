@@ -1,0 +1,119 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 28; 32; 40
+    Fixed Frame: world
+    Frame Rate: 30
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: World grid
+      Enabled: true
+      Cell Size: 0.25
+      Plane Cell Count: 40
+      Color: 90; 98; 112
+    - Class: rviz_default_plugins/MarkerArray
+      Name: Bodies - vectors - CoP - contact
+      Enabled: true
+      Topic:
+        Value: /hih_viz/markers
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        History Policy: Keep Last
+        Depth: 2
+    - Class: rviz_default_plugins/TF
+      Name: Body and contact frames
+      Enabled: false
+      Show Axes: true
+      Show Arrows: true
+      Show Names: true
+      Frame Timeout: 1
+    - Class: rviz_default_plugins/Path
+      Name: Leader actual
+      Enabled: true
+      Color: 255; 122; 41
+      Line Style: Billboards
+      Line Width: 0.012
+      Topic:
+        Value: /hih_viz/leader/path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 2
+    - Class: rviz_default_plugins/Path
+      Name: Follower actual
+      Enabled: true
+      Color: 56; 153; 255
+      Line Style: Billboards
+      Line Width: 0.012
+      Topic:
+        Value: /hih_viz/follower/path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 2
+    - Class: rviz_default_plugins/Path
+      Name: Payload actual
+      Enabled: true
+      Color: 191; 166; 242
+      Line Style: Billboards
+      Line Width: 0.012
+      Topic:
+        Value: /hih_viz/payload/path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 2
+    - Class: rviz_default_plugins/Path
+      Name: Leader upstream reference
+      Enabled: true
+      Color: 255; 255; 255
+      Line Style: Billboards
+      Line Width: 0.006
+      Topic:
+        Value: /hih_viz/leader/reference_path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 2
+    - Class: rviz_default_plugins/Path
+      Name: Follower upstream reference
+      Enabled: false
+      Color: 180; 220; 255
+      Line Style: Billboards
+      Line Width: 0.006
+      Topic:
+        Value: /hih_viz/follower/reference_path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 2
+    - Class: rviz_default_plugins/Path
+      Name: Follower admittance output
+      Enabled: false
+      Color: 255; 205; 100
+      Line Style: Billboards
+      Line Width: 0.006
+      Topic:
+        Value: /hih_viz/follower/admittance_path
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+        Depth: 2
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Name: Current View
+      Target Frame: world
+      Distance: 3.2
+      Pitch: 0.45
+      Yaw: 1.57
+      Focal Point:
+        X: 0.0
+        Y: 0.0
+        Z: 1.2
+Window Geometry:
+  Width: 1440
+  Height: 900
