@@ -124,3 +124,73 @@ def test_geometry_uses_private_data_and_never_steps_physics(scene, monkeypatch):
     np.testing.assert_array_equal(live_data.qpos, before_qpos)
     np.testing.assert_array_equal(live_data.qvel, before_qvel)
     assert display.data.time == live_data.time == 0.
+
+
+@pytest.mark.parametrize('drone_source', ['measured', 'ground_truth'])
+def test_original_plant_payload_output_reaches_model_tf_path_and_vectors(scene, monkeypatch, drone_source):
+    """Run the original plant's helper and actual RViz subscriber callbacks."""
+    import threading
+    ros.install(monkeypatch)
+    telemetry_module = pytest.importorskip('plant.payload_telemetry')
+    importlib.reload(telemetry_module)
+    ros.Node.overrides = {'model_xml_path': str(scene), 'drone_state_source': drone_source}
+    module = importlib.import_module('hih_rviz.visualizer')
+    importlib.reload(module)
+    visualizer = module.HIHVisualizer()
+    plant = ros.Node('cooperation_plant')
+    plant.model = mujoco.MjModel.from_xml_path(str(scene))
+    plant.data = mujoco.MjData(plant.model)
+    plant.lock = threading.Lock()
+    plant.payload_body = plant.model.body('payload_contact_box').id
+    joint = int(plant.model.body_jntadr[plant.payload_body])
+    qpos = int(plant.model.jnt_qposadr[joint])
+    qvel = int(plant.model.jnt_dofadr[joint])
+    position = [1., -.4, 1.6]
+    q = quaternion_rpy([.2, -.3, 1.1])
+    plant.data.qpos[qpos:qpos+7] = [*position, *q[[3, 0, 1, 2]]]
+    plant.data.qvel[qvel:qvel+6] = [.3, -.2, .1, .1, .2, -.3]
+    mujoco.mj_forward(plant.model, plant.data)
+    telemetry = telemetry_module.PayloadTelemetry(plant)
+    subscribers = {sub.topic: sub.callback for sub in visualizer.subscriptions}
+    assert telemetry_module.ODOMETRY_TOPIC in subscribers
+    assert telemetry_module.ACCELERATION_TOPIC in subscribers
+    telemetry.publish()
+    subscribers[telemetry_module.ODOMETRY_TOPIC](telemetry.odometry_pub.messages[-1])
+
+    # The second actual sample supplies a known World linear acceleration.
+    plant.data.time += .1
+    plant.data.qvel[qvel:qvel+3] += [.02, -.03, .04]
+    mujoco.mj_forward(plant.model, plant.data)
+    before = plant.data.qpos.copy(), plant.data.qvel.copy(), plant.data.ctrl.copy()
+    telemetry.publish()
+    subscribers[telemetry_module.ODOMETRY_TOPIC](telemetry.odometry_pub.messages[-1])
+    subscribers[telemetry_module.ACCELERATION_TOPIC](telemetry.acceleration_pub.messages[-1])
+    visualizer.tick()
+
+    np.testing.assert_allclose(visualizer.states['payload'].position, position)
+    np.testing.assert_allclose(visualizer.states['payload'].velocity_world, [.32, -.23, .14])
+    np.testing.assert_allclose(visualizer.states['payload'].omega_body, [.1, .2, -.3], atol=1e-12)
+    markers = visualizer.marker_pub.messages[-1].markers
+    model_marker = next(m for m in markers if m.ns == 'payload/model' and m.action == ros.Marker.ADD)
+    np.testing.assert_allclose([model_marker.pose.position.x, model_marker.pose.position.y,
+                               model_marker.pose.position.z], position)
+    orientation = model_marker.pose.orientation
+    np.testing.assert_allclose(rotation([orientation.x, orientation.y, orientation.z, orientation.w]),
+                               rotation(q), atol=1e-12)
+    assert 'payload: ground_truth' in visualizer.status_pub.messages[-1].data
+    assert any(m.ns == 'payload/state' for m in markers)
+    assert any(m.ns == 'payload/velocity' for m in markers)
+    assert any(m.ns == 'payload/angular_velocity' for m in markers)
+    transform = next(msg for msg in visualizer.tf.messages if msg.child_frame_id == 'hih_viz/payload/base_link')
+    assert transform.header.frame_id == 'world'
+    np.testing.assert_allclose([transform.transform.translation.x, transform.transform.translation.y,
+                               transform.transform.translation.z], position)
+    path = visualizer.publishers_by_role['payload']['path'].messages[-1]
+    assert path.poses[-1].pose.position.x == pytest.approx(position[0])
+    acceleration = visualizer.publishers_by_role['payload']['acceleration'].messages[-1]
+    np.testing.assert_allclose([acceleration.vector.x, acceleration.vector.y, acceleration.vector.z],
+                               [.2, -.3, .4], atol=1e-12)
+    assert all(topic.startswith('/hih_viz/') for topic in visualizer.publishers)
+    np.testing.assert_array_equal(plant.data.qpos, before[0])
+    np.testing.assert_array_equal(plant.data.qvel, before[1])
+    np.testing.assert_array_equal(plant.data.ctrl, before[2])

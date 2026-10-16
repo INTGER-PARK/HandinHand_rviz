@@ -14,8 +14,9 @@ hih_rviz:
     acceleration_mode: body_specific_force
     gravity_world: [0.0, 0.0, -9.81]
     state_topic_template: /{role}/minitrone/state
-    # Optional INPUTS only. This package never starts a plant or exports its GT.
-    # Original HandinHand_sim 9b1e82e does not publish these GT topics.
+    # INPUTS only. Original CooperationPlant now publishes payload odom/accel.
+    # Drone GT inputs remain optional; normal drone display uses measured state.
+    # This package never starts a plant or exports its GT.
     ground_truth_odom_topic_template: /hih/ground_truth/{role}/odometry
     ground_truth_acceleration_topic_template: /hih/ground_truth/{role}/acceleration
     command_topic_template: /{role}/minitrone/cmd

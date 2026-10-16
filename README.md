@@ -2,7 +2,8 @@
 
 HandinHand_sim의 **Leader · Follower · Payload** 상태와 접촉을 RViz2에서 확인하는
 별도 ROS 2 Python 패키지입니다. Ubuntu 22.04 / ROS 2 Humble을 대상으로 작성했습니다.
-인터페이스 기준은 `INTGER-PARK/HandinHand_sim`의 **9b1e82e**입니다.
+드론 인터페이스 기준은 `INTGER-PARK/HandinHand_sim`의 **9b1e82e**입니다.
+Payload 전체 표시는 원본 simulator의 payload telemetry 추가 버전이 필요합니다.
 
 **이미 실행 중인 MuJoCo 시뮬레이터를 관찰하는 시각화 전용 패키지입니다.**
 기존 상태·명령·피드백을 구독하고 `/hih_viz/*`와 표시용 TF만 발행합니다.
@@ -18,9 +19,9 @@ HandinHand_sim의 **Leader · Follower · Payload** 상태와 접촉을 RViz2에
 
 | 항목 | Leader / Follower | Payload |
 | --- | --- | --- |
-| 위치·자세 | 기존 state, 3D 기체·Body 축·수치 | 외부에서 payload odometry가 제공될 때 표시 |
+| 위치·자세 | 기존 state, 3D 기체·Body 축·수치 | 원본 plant의 payload GT, 3D 상자·Body 축·수치 |
 | 선속도 | World 화살표·수치 | World 화살표·수치 |
-| 선가속도 | IMU specific force를 World 선가속도로 변환 또는 World 입력 사용 | 외부에서 World 가속도가 제공될 때 표시 |
+| 선가속도 | IMU specific force를 World 선가속도로 변환 또는 World 입력 사용 | 원본 plant가 World 속도를 simulation time으로 차분한 값 |
 | 각속도 | Body 수치 + World로 회전한 화살표 | Body 수치 + World 화살표 |
 | 실제 궤적 | 측정/GT 위치의 이력 | GT 위치의 이력 |
 | 명령 궤적 | upstream `cmd`와 `cmd_admittance`를 각각 분리 | payload 목표 명령을 가정하지 않음 |
@@ -29,12 +30,16 @@ HandinHand_sim의 **Leader · Follower · Payload** 상태와 접촉을 RViz2에
 | 힘·모멘트 | MoB 추정 렌치와 Solver 접촉 렌치 | 두 드론의 접촉 합력/모멘트와 각 면의 GT 렌치 |
 | solver 접촉점 | 기존 contact_diagnostics 입력이 있을 때 선택적으로 표시 | 두 드론 판에서 표시 |
 
-**원본 HandinHand_sim 9b1e82e는 payload odometry/acceleration과 contact_diagnostics를
-토픽으로 발행하지 않습니다.** 따라서 기본 실행에서는 드론 상태·CoP·렌치를 표시하고,
-payload 자세가 필요한 3D 모델·벡터·궤적은 `waiting/stale`로 둡니다.
-두 드론 사이의 중간점으로 payload 상태를 가정하지 않습니다. Payload 전체 상태까지
-보려면 원본 plant 쪽에 실제 MjData를 읽어 내보내는 출력 전용 telemetry가 별도로 필요합니다.
-이 패키지는 해당 출력을 만들기 위해 plant를 대체하거나 추가 실행하지 않습니다.
+**업데이트한 원본 HandinHand_sim의 기존 `cooperation_plant`가 payload odometry와
+World acceleration을 기본 30 Hz로 발행합니다.** 이 패키지는 그 출력을 구독하여 payload의
+실제 3D 형상·위치·자세·선속도·선가속도·각속도·이동 궤적과 기존 접촉 렌치를 표시합니다.
+두 드론 사이의 중간점으로 상태를 가정하지 않습니다. 같은 MuJoCo 데이터의 실제 관측값입니다.
+RViz는 plant를 대체하거나 추가 실행하지 않습니다.
+
+원본 simulator는 [payload telemetry 설명](https://github.com/INTGER-PARK/HandinHand_sim/blob/main/README_PAYLOAD_RVIZ_KR.md)에
+따라 업데이트·재빌드하고, 기존 plant를 다시 시작해야 합니다. 구버전 plant 또는 telemetry OFF
+상태에서는 payload만 `waiting/stale`입니다. 이번 출력 추가는 drone GT/joint_states와
+contact_diagnostics 토픽을 제공하지 않습니다. 드론은 기본 `measured` 모드로 표시합니다.
 
 기체와 payload 형상은 **설치된 `hih_plant/xml/Cooperation.xml`을 직접 읽어 재사용**합니다.
 MuJoCo가 `Leader.xml` / `Follower.xml` / `contact_box.xml`의 include·재질·`fromto`·관절을
@@ -53,6 +58,19 @@ RViz 전용으로 따로 정한 기체 치수나 임의의 rotor 배치를 사�
 먼저 기존 HandinHand_sim을 빌드하고, 그 시뮬레이터가 실행되는 Python/ROS 환경을 사용합니다.
 `hih_interfaces`를 이 저장소에 복제하거나 메시지 정의를 다시 작성할 필요는 없습니다.
 이 문서의 기존 workspace 경로는 본인의 경로에 맞게 변경하세요.
+
+Payload 출력을 포함하도록 원본 simulator를 먼저 업데이트합니다.
+
+```bash
+source /opt/ros/humble/setup.bash
+sudo apt install ros-humble-nav-msgs ros-humble-geometry-msgs
+cd ~/ros2_project/HandinHand_sim
+git pull --ff-only
+colcon build --symlink-install --packages-select hih_plant
+source install/setup.bash
+```
+
+그다음 별도 visualization workspace를 빌드합니다.
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -89,6 +107,8 @@ ros2 launch hih_rviz visualization.launch.py
 
 실행되는 노드는 `hih_visualizer`와 `rviz2`뿐입니다. 기존 MuJoCo viewer를 함께 켜도 됩니다.
 RViz 종료/재시작은 시각화 노드만 종료/재시작하며 plant와 제어 노드는 그대로 실행됩니다.
+Payload는 원본 `/hih/ground_truth/payload/odometry`와 `/hih/ground_truth/payload/acceleration`에
+기본 연결되므로 별도 인자 없이 표시됩니다. `drone_state_source`는 `measured`로 유지하면 됩니다.
 
 | launch 인자 | 기본값 | 의미 |
 | --- | --- | --- |
@@ -171,6 +191,10 @@ Leader face 축은 payload 축에서 yaw=pi 회전합니다. Payload의 두 면 
 
 선택 GT 가속도 입력은 World 성분의 `geometry_msgs/AccelStamped`입니다.
 시각화 노드가 물리 시뮬레이션의 qacc나 새 센서를 생성하지 않습니다.
+Payload 입력은 원본 plant의 Body 원점 `data.xpos`와 `data.xquat`입니다.
+Odometry의 pose는 World, twist는 payload Body 성분이며, 모든 축의 자세를 반영합니다.
+원본 plant의 가속도는 World 속도의 simulation-time 차분으로, 첫 샘플·정지·reset·긴 공백에서는
+발행하지 않습니다. IMU specific force가 아니므로 payload GT 가속도에 중력을 다시 더하지 않습니다.
 
 ## 6. 화면과 설정 변경
 
@@ -237,8 +261,10 @@ ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'
 | 구독 입력 | 타입 | 필수 여부 |
 | --- | --- | --- |
 | `/{role}/minitrone/state` | hih_interfaces/MinitroneState | measured 드론 표시 |
-| `/hih/ground_truth/{body}/odometry` | nav_msgs/Odometry | payload 또는 GT 모드; 외부 입력 필요 |
-| `/hih/ground_truth/{body}/acceleration` | geometry_msgs/AccelStamped | GT 가속도; 외부 입력 필요 |
+| `/hih/ground_truth/payload/odometry` | nav_msgs/Odometry | 업데이트한 원본 plant의 payload pose/twist |
+| `/hih/ground_truth/payload/acceleration` | geometry_msgs/AccelStamped | 업데이트한 원본 plant의 payload World 가속도 |
+| `/hih/ground_truth/{role}/odometry` | nav_msgs/Odometry | drone GT 모드일 때 외부 입력 필요 |
+| `/hih/ground_truth/{role}/acceleration` | geometry_msgs/AccelStamped | 선택 drone GT 가속도; 외부 입력 필요 |
 | `/hih/ground_truth/{role}/joint_states` | sensor_msgs/JointState | GT 모드의 네 servo position [rad] |
 | `/{role}/minitrone/cmd` | hih_interfaces/Cmd | upstream 경로, 선택 |
 | `/{role}/minitrone/cmd_admittance` | hih_interfaces/Cmd | admittance 출력 경로, 선택 |
@@ -264,8 +290,8 @@ ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'
 | `/hih_viz/payload/wrench_contact` | geometry_msgs/WrenchStamped, payload Body/CoM |
 | `/tf` | world → hih_viz/{body}/base_link → drone contact/plate_center |
 
-이 패키지는 위 구독 입력을 발행하지 않습니다. `/hih/ground_truth/*`나 contact diagnostics를
-제공하는 외부 publisher가 없으면 해당 항목은 표시하지 않습니다.
+이 패키지는 위 구독 입력을 발행하지 않습니다. Payload GT는 원본 plant가 출력하며,
+선택 drone GT/contact diagnostics를 제공하는 publisher가 없으면 해당 항목은 표시하지 않습니다.
 이 표의 경로는 미래의 전체 planned trajectory가 아니라 지금까지 발행된 명령의 이력입니다.
 controller 내부에서 합산되는 모든 CoP/attitude offset을 포함한 최종 desired pose라고 가정하지 않습니다.
 
@@ -277,12 +303,13 @@ controller 내부에서 합산되는 모든 CoP/attitude offset을 포함한 최
 
 ## 8. rosbag 재생
 
-원본 headerless 입력을 기록합니다. Payload GT가 별도로 제공된다면 해당 입력도 추가합니다.
+원본 headerless 입력과 원본 plant의 payload GT를 함께 기록합니다.
 작은 예시는 다음과 같습니다.
 
 ```bash
 ros2 bag record -o hih_rviz_run \
   /leader/minitrone/state /follower/minitrone/state \
+  /hih/ground_truth/payload/odometry /hih/ground_truth/payload/acceleration \
   /leader/minitrone/cop_hat /follower/minitrone/cop_hat \
   /leader/minitrone/cop_solver_real /follower/minitrone/cop_solver_real \
   /leader/minitrone/external_wrench_hat_second_order \
@@ -313,7 +340,7 @@ ros2 run tf2_ros tf2_echo world hih_viz/follower/base_link
 | 증상 | 확인할 내용 |
 | --- | --- |
 | 모든 표시가 없음 | ROS 환경 source, domain, Fixed Frame=world, `/hih_viz/status` |
-| payload만 없음 | 원본 9b1e82e에는 payload odometry가 없음; 외부 입력 전까지 waiting이 정상 |
+| payload만 없음 | 원본 simulator 업데이트·hih_plant 재빌드·plant 재시작 및 enable_payload_telemetry=true 확인 |
 | CoP 점 없음 | 해당 source 발행, valid=true, normal_force>0 확인 |
 | 안전 사각형 없음 | CoP 노드 실행/이름/parameter service 확인; manual 기본은 숨김 |
 | 정지인데 가속도가 약 9.81 | acceleration_mode가 sensor model 모드와 맞는지 확인 |
@@ -340,6 +367,9 @@ python3 -m pytest -q test
 bounded history/reset, 실제 visualizer callback의 invalid/stale 삭제와 메시지 원점,
 조회 전용 safety query를 확인합니다. 전체 출력 토픽과 서비스 타입, launch/entry point를
 검사하여 제어 입력 발행 및 plant/제어기 실행 경로가 없는지도 확인합니다.
+설치된 `plant.payload_telemetry`가 있으면 실제 payload publisher helper의 메시지를 받아
+3D 상자 모델·TF·Path·속도·가속도까지 이어지는 연결도 검사합니다. 두 패키지의 소스가 같은
+Python 경로에 있거나 simulator workspace를 source해야 이 연결 검사를 실행합니다.
 MJCF 형상 검사는 native material/group 선택, capsule 끝점, 실제 servo FK, World 자세 결합과
 sensor noise 아래 geometry cache의 메모리 제한을 확인합니다. 원본 Cooperation.xml 기준으로도
 드론별 visible geom 48개(각각 RViz primitive 52개)의 위치·회전·크기 284개 조건을 확인했습니다.
@@ -367,6 +397,7 @@ source install/setup.bash
 ```
 
 시뮬레이터 메시지·XML·좌표계가 변경되면 이 패키지의 입력 규약과 YAML도 확인하세요.
+Payload 표시를 추가하려면 원본 simulator도 2번 안내대로 업데이트·재빌드하고 plant를 재시작하세요.
 기존 `simulation.launch.py`/`demo.launch.py`를 실행 중이었다면 해당 프로세스를 종료하고,
 원래 HandinHand_sim launch를 실행한 뒤 `visualization.launch.py`만 추가로 실행하세요.
 
