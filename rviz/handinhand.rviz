@@ -12,13 +12,75 @@ Visualization Manager:
   Displays:
     - Class: rviz_default_plugins/Grid
       Name: World grid
-      Enabled: true
+      Enabled: false
       Cell Size: 0.25
       Plane Cell Count: 40
       Color: 90; 98; 112
     - Class: rviz_default_plugins/MarkerArray
       Name: Bodies - vectors - CoP - contact
       Enabled: true
+      Namespaces:
+        follower/acceleration: false
+        follower/angular_velocity: false
+        follower/axes: false
+        follower/contact_force: false
+        follower/contact_moment: false
+        follower/contact_points: false
+        follower/contact_wrench: false
+        follower/cop_mob: false
+        follower/cop_mob_text: false
+        follower/cop_solver: false
+        follower/cop_solver_text: false
+        follower/estimated_force: false
+        follower/estimated_moment: false
+        follower/estimated_wrench: false
+        follower/model: true
+        follower/plate_boundary: false
+        follower/safe_attitude: false
+        follower/safe_manual: false
+        follower/safe_translation: false
+        follower/state: false
+        follower/velocity: false
+        leader/acceleration: false
+        leader/angular_velocity: false
+        leader/axes: false
+        leader/contact_force: false
+        leader/contact_moment: false
+        leader/contact_points: false
+        leader/contact_wrench: false
+        leader/cop_mob: false
+        leader/cop_mob_text: false
+        leader/cop_solver: false
+        leader/cop_solver_text: false
+        leader/estimated_force: false
+        leader/estimated_moment: false
+        leader/estimated_wrench: false
+        leader/model: true
+        leader/plate_boundary: false
+        leader/safe_attitude: false
+        leader/safe_manual: false
+        leader/safe_translation: false
+        leader/state: false
+        leader/velocity: false
+        legend: false
+        payload/acceleration: false
+        payload/angular_velocity: false
+        payload/axes: false
+        payload/com: false
+        payload/com_cross: false
+        payload/com_text: false
+        payload/contact_force: false
+        payload/contact_moment: false
+        payload/contact_wrench: false
+        payload/follower_force: false
+        payload/follower_moment: false
+        payload/follower_wrench: false
+        payload/leader_force: false
+        payload/leader_moment: false
+        payload/leader_wrench: false
+        payload/model: true
+        payload/state: false
+        payload/velocity: false
       Topic:
         Value: /hih_viz/markers
         Reliability Policy: Reliable
@@ -27,10 +89,10 @@ Visualization Manager:
         Depth: 2
     - Class: rviz_default_plugins/TF
       Name: Body and contact frames
-      Enabled: false
+      Enabled: true
       Show Axes: true
       Show Arrows: true
-      Show Names: true
+      Show Names: false
       Frame Timeout: 1
     - Class: rviz_default_plugins/Path
       Name: Leader actual
@@ -78,7 +140,7 @@ Visualization Manager:
         Depth: 2
     - Class: rviz_default_plugins/Path
       Name: Follower upstream reference
-      Enabled: false
+      Enabled: true
       Color: 180; 220; 255
       Line Style: Billboards
       Line Width: 0.006
@@ -89,7 +151,7 @@ Visualization Manager:
         Depth: 2
     - Class: rviz_default_plugins/Path
       Name: Follower admittance output
-      Enabled: false
+      Enabled: true
       Color: 255; 205; 100
       Line Style: Billboards
       Line Width: 0.006

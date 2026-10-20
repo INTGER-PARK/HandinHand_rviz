@@ -31,7 +31,7 @@ def test_attach_without_payload_never_invents_a_payload_pose(node):
     markers = active_markers(node)
     assert 'leader/axes' in markers and 'follower/axes' in markers
     assert 'payload/axes' not in markers
-    assert not any(m.type == ros.Marker.TEXT_VIEW_FACING for m in markers.values())
+    assert 'leader/state' in markers and 'follower/state' in markers
     assert 'payload: waiting/stale' in node.status_pub.messages[-1].data
 
 
@@ -216,7 +216,7 @@ def test_payload_com_needs_both_actual_position_and_running_node_heartbeat(node)
     np.testing.assert_allclose([marker.pose.position.x, marker.pose.position.y,
                                marker.pose.position.z], [.025, -.015, 1.])
     assert marker.type == ros.Marker.SPHERE
-    assert not any(m.type == ros.Marker.TEXT_VIEW_FACING for m in active_markers(node).values())
+    assert active_markers(node)['payload/com_text'].text == 'CoM'
     node.on_payload_com(com_point(.02, .01, 1.2))
     node.tick()
     assert active_markers(node)['payload/com'].pose.position.z == 1.2

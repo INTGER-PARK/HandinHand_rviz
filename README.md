@@ -198,8 +198,8 @@ Odometry의 pose는 World, twist는 payload Body 성분이며, 모든 축의 자
 
 ## 6. 화면과 설정 변경
 
-`config/visualization.yaml`이 시각화 기본값의 유일한 설정 파일입니다.
-`world_frame`, topic template, 표시 항목, 화살표 배율, 이력 길이를 여기서 수정합니다.
+`config/visualization.yaml`은 데이터 생성·좌표계·화살표 배율·이력 길이의 설정 파일입니다.
+시작 시 화면에 보일 항목은 **`rviz/handinhand.rviz`의 Displays와 Namespaces**에서 설정합니다.
 드론의 실제 부품 치수/배치는 simulator XML이 원본이며 YAML에서 별도로 재정의하지 않습니다.
 사용자 설정 파일을 따로 복사해 실행할 수도 있습니다.
 
@@ -221,17 +221,36 @@ ros2 launch hih_rviz visualization.launch.py config:=/absolute/path/my_visualiza
 | 흰 사각형 | 실제 판 외곽 |
 | 초록 / 분홍 사각형 | attitude / translation CoP 노드에서 읽은 안전 경계 |
 
-RViz Displays에서 TF, reference/admittance Path를 개별로 켜고 끌 수 있습니다.
-MarkerArray의 namespace들도 개별 표시할 수 있습니다.
-Fixed Frame은 기본 `world`입니다. Body frame으로 바꾸면 궤적을 해석하기 어려워집니다.
-상태·CoP·렌치 수치 라벨과 상단 상태/색상 설명은 기본 `show_labels: false`로 숨깁니다.
-텍스트를 다시 표시하려면 `config/visualization.yaml`에서 `show_labels: true`로 바꾸고
-시각화 노드를 재시작하세요. `/hih_viz/status` 토픽으로도 상태를 확인할 수 있습니다.
+기본 화면에는 **Leader / Follower / Payload 모델, TF, 궤적만** 표시합니다.
 
-Payload의 실제 **COM은 `hih_payload_disturbance` 노드가 실행 중일 때만**
-자홍색 구와 십자로 자동 표시됩니다. `C` 입력 전이나 COM 이동을 일시정지한 상태에서도
-노드가 실행 중이면 현재 COM이 보이며, wind 노드만 실행한 경우에는 나타나지 않습니다.
-내부 COM이 가려지지 않도록 그동안 payload 모델의 표시 alpha를 기본 0.25로 낮춥니다.
+| 항목 | 시작 시 표시 |
+| --- | --- |
+| `leader/model`, `follower/model`, `payload/model` | ON |
+| TF (`Body and contact frames`) | ON; frame 이름 문자는 OFF |
+| 세 물체의 actual Path, Leader/Follower reference Path, Follower admittance Path | ON |
+| 속도·가속도·각속도, 추정/접촉 렌치, CoP, 판/안전 경계, 접촉점 | OFF |
+| 상태/수치/legend 문자, COM 구·십자·문자, World grid | OFF |
+
+직접 켜려면 RViz 왼쪽 **Displays → Bodies - vectors - CoP - contact → Namespaces**를 펼쳐
+원하는 namespace만 체크하세요. 예를 들어 `leader/cop_mob`, `follower/contact_force`,
+`payload/com`을 개별로 선택할 수 있습니다. TF, Path와 grid는 각각의 Display 체크를 사용합니다.
+늦게 데이터가 들어오는 CoP·COM·접촉점도 미리 저장된 기본 OFF 설정을 따릅니다.
+해당 데이터가 아직 없거나 invalid이면 namespace/마커는 데이터가 유효해질 때 나타납니다.
+업데이트한 기본 체크 상태를 적용하려면 **RViz 창도 다시 실행**하세요.
+시각화 노드만 재시작하면 이미 열려 있는 RViz 창의 수동 체크 상태는 유지됩니다.
+
+수동 체크로 바로 켤 수 있도록 기본 YAML의 `show_*` 플래그는 마커 **발행을 허용**합니다.
+특히 `show_labels: true`와 `show_contact_points: true`여도 기본 화면에서는 namespace 체크가 OFF입니다.
+사용자 YAML에서 이 값을 false로 바꾸면 해당 마커 발행이 중단되므로 체크만으로 표시할 수 없습니다.
+Fixed Frame은 기본 `world`입니다. Body frame으로 바꾸면 궤적을 해석하기 어려워집니다.
+상태 문자는 `*/state`, CoP 문자는 `*/cop_*_text`, 렌치 수치는 `*/*_wrench`,
+상단 상태/색상 설명은 `legend`를 체크하면 표시됩니다. `/hih_viz/status`로도 상태를 확인할 수 있습니다.
+
+Payload의 실제 **COM 마커는 `hih_payload_disturbance` 노드가 실행 중일 때만** 생성됩니다.
+기본 표시 체크는 OFF이므로 **`payload/com`과 `payload/com_cross`를 직접 켜면**
+자홍색 구와 십자를 볼 수 있습니다. `C` 입력 전이나 COM 이동을 일시정지한 상태에서도
+노드가 실행 중이면 마커가 유지되며, wind 노드만 실행한 경우에는 생성되지 않습니다.
+내부 COM을 볼 수 있도록 해당 노드의 heartbeat가 유효한 동안 payload 모델 alpha를 기본 0.25로 낮춥니다.
 노드 종료 신호 또는 heartbeat/COM 위치의 수신 만료 시 마커를 지우고 원래 alpha를 복구합니다.
 강제 종료나 통신 단절 시 기본 최대 약 0.7초(`feedback_timeout_s`) 후 숨겨집니다.
 
@@ -245,7 +264,7 @@ COM 구는 실제 `/hih/ground_truth/payload/com`의 World 위치를 사용합�
 Body 중심이나 명령 offset으로 COM을 추정하지 않습니다.
 `show_payload_com: true`는 fresh COM과 실행 상태 신호가 있을 때만 표시를 허용한다는 뜻입니다.
 아예 숨기려면 false, 구 크기는 `payload_com_diameter_m`, 표시 중 상자 투명도는
-`payload_com_model_alpha`로 설정하세요. 수치/문자 라벨은 기존 `show_labels: false`를 따릅니다.
+`payload_com_model_alpha`로 설정하세요. COM 문자는 `payload/com_text`를 직접 체크합니다.
 모든 설정은 표시용이며 시뮬레이터의 물리 파라미터나 COM 명령에는 영향을 주지 않습니다.
 
 `model_xml_path`가 빈 문자열이면 source한 `hih_plant`의 `xml/Cooperation.xml`을 사용합니다.

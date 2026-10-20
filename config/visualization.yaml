@@ -1,4 +1,5 @@
-# Visualization defaults live only here. These values never tune a controller.
+# Visualization data generation and geometry settings. No controller tuning.
+# Initial display/namespace checkboxes live in rviz/handinhand.rviz.
 hih_rviz:
   ros__parameters:
     world_frame: world
@@ -66,8 +67,8 @@ hih_rviz:
     model_geom_groups: [0, 1, 2]  # MuJoCo viewer's default visible geom groups.
     ground_truth_joint_state_topic_template: /hih/ground_truth/{role}/joint_states
     show_axes: true
-    show_labels: false  # State, CoP, wrench text and status legend are opt-in.
+    show_labels: true  # Publish labels; RViz namespaces start OFF for manual enabling.
     show_kinematics: true
     show_estimated_wrench: true
     show_contact_wrench: true
-    show_contact_points: false
+    show_contact_points: true  # Available diagnostics only; RViz namespace starts OFF.
