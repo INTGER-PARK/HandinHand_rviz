@@ -289,7 +289,8 @@ attitude와 translation의 경계가 다르면 각각 표시합니다. 노드가
 화살표 길이는 SI 벡터에 표시 배율을 곱한 후 `max_arrow_length_m`로 제한합니다.
 수치와 표준 메시지에는 원래 물리값을 그대로 사용하며 표시 제한은 제어 제한이 아닙니다.
 
-이력은 기본 1000점 / 최근 120초로 제한됩니다. 이력만 비우려면:
+이력은 기본 667점 / 최근 80초 중 먼저 도달하는 조건으로 제한됩니다.
+실제·reference·admittance 궤적에 공통 적용하며, 점을 기록하는 간격은 유지합니다. 이력만 비우려면:
 
 ```bash
 ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'

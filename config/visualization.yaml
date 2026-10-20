@@ -50,8 +50,8 @@ hih_rviz:
     payload_com_enabled_topic: /hih/disturbance/payload/com_visualization_enabled
     payload_com_diameter_m: 0.03
     payload_com_model_alpha: 0.25  # Reveal the interior only while COM is shown.
-    history_max_points: 1000
-    history_max_age_s: 120.0
+    history_max_points: 667
+    history_max_age_s: 80.0
     history_interval_s: 0.05
     history_min_distance_m: 0.005
     velocity_scale: 0.4             # m / (m/s)
