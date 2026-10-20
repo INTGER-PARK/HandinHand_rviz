@@ -484,8 +484,9 @@ class HIHVisualizer(Node):
         status_text = ' | '.join(status)
         if self.cfg['show_models'] and self.geometry is None:
             status_text += ' | MJCF model unavailable'
-        marks.text('legend', [0., 0., 2.5], status_text +
-                   '\nCoP/F: yellow=MoB cyan=solver | v=green a=red omega=purple', WHITE, .05)
+        if self.cfg['show_labels']:
+            marks.text('legend', [0., 0., 2.5], status_text +
+                       '\nCoP/F: yellow=MoB cyan=solver | v=green a=red omega=purple', WHITE, .05)
         output, self.previous_markers = marks.finish(self.previous_markers)
         self.marker_pub.publish(output)
         msg = String()

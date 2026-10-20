@@ -178,7 +178,7 @@ def test_original_plant_payload_output_reaches_model_tf_path_and_vectors(scene, 
     np.testing.assert_allclose(rotation([orientation.x, orientation.y, orientation.z, orientation.w]),
                                rotation(q), atol=1e-12)
     assert 'payload: ground_truth' in visualizer.status_pub.messages[-1].data
-    assert any(m.ns == 'payload/state' for m in markers)
+    assert not any(m.type == ros.Marker.TEXT_VIEW_FACING for m in markers)
     assert any(m.ns == 'payload/velocity' for m in markers)
     assert any(m.ns == 'payload/angular_velocity' for m in markers)
     transform = next(msg for msg in visualizer.tf.messages if msg.child_frame_id == 'hih_viz/payload/base_link')

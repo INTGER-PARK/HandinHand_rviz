@@ -224,7 +224,9 @@ ros2 launch hih_rviz visualization.launch.py config:=/absolute/path/my_visualiza
 RViz Displays에서 TF, reference/admittance Path를 개별로 켜고 끌 수 있습니다.
 MarkerArray의 namespace들도 개별 표시할 수 있습니다.
 Fixed Frame은 기본 `world`입니다. Body frame으로 바꾸면 궤적을 해석하기 어려워집니다.
-전체 상태가 겹쳐 보이면 `show_labels: false`로 수치를 숨기고 화살표/모델만 보세요.
+상태·CoP·렌치 수치 라벨과 상단 상태/색상 설명은 기본 `show_labels: false`로 숨깁니다.
+텍스트를 다시 표시하려면 `config/visualization.yaml`에서 `show_labels: true`로 바꾸고
+시각화 노드를 재시작하세요. `/hih_viz/status` 토픽으로도 상태를 확인할 수 있습니다.
 
 `model_xml_path`가 빈 문자열이면 source한 `hih_plant`의 `xml/Cooperation.xml`을 사용합니다.
 다른 MJCF를 사용하려면 이 값에 절대 경로를 지정하세요. 현재 body/joint 이름 규약은 유지해야 합니다.

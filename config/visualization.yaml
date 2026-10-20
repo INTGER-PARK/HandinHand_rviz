@@ -59,7 +59,7 @@ hih_rviz:
     model_geom_groups: [0, 1, 2]  # MuJoCo viewer's default visible geom groups.
     ground_truth_joint_state_topic_template: /hih/ground_truth/{role}/joint_states
     show_axes: true
-    show_labels: true
+    show_labels: false  # State, CoP, wrench text and status legend are opt-in.
     show_kinematics: true
     show_estimated_wrench: true
     show_contact_wrench: true
