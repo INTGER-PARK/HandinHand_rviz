@@ -30,9 +30,19 @@ class Msg:
         self.__dict__.update(values)
 
 
+class Bool(Msg):
+    def __init__(self, data=False):
+        super().__init__(data=data)
+
+
 class PoseStamped:
     def __init__(self):
         self.header, self.pose = header(), pose()
+
+
+class PointStamped:
+    def __init__(self):
+        self.header, self.point = header(), vector()
 
 
 class TransformStamped:
@@ -199,12 +209,12 @@ def install(monkeypatch):
         'rclpy.qos': {'qos_profile_sensor_data': object()},
         'rcl_interfaces.msg': {'ParameterDescriptor': Msg},
         'rcl_interfaces.srv': {'GetParameters': GetParameters},
-        'geometry_msgs.msg': {'Point': lambda: vector(), 'PoseStamped': PoseStamped,
+        'geometry_msgs.msg': {'Point': lambda: vector(), 'PointStamped': PointStamped, 'PoseStamped': PoseStamped,
                               'TransformStamped': TransformStamped, 'AccelStamped': AccelStamped,
                               'Vector3Stamped': Vector3Stamped, 'WrenchStamped': WrenchStamped},
         'nav_msgs.msg': {'Odometry': Odometry, 'Path': Path},
         'sensor_msgs.msg': {'JointState': JointState},
-        'std_msgs.msg': {'String': Msg},
+        'std_msgs.msg': {'String': Msg, 'Bool': Bool},
         'std_srvs.srv': {'Trigger': Msg},
         'tf2_ros': {'TransformBroadcaster': TransformBroadcaster},
         'visualization_msgs.msg': {'Marker': Marker, 'MarkerArray': Msg},

@@ -62,6 +62,10 @@ def test_receiving_telemetry_only_publishes_visualization_and_reads_parameters(n
         elif sub.cls is ros.AccelStamped:
             msg = ros.AccelStamped()
             msg.header.frame_id = 'world'
+        elif sub.cls is ros.PointStamped:
+            msg = com_point()
+        elif sub.cls is ros.Bool:
+            msg = ros.Bool(data=True)
         else:  # Optional contact diagnostic is not a command input.
             continue
         sub.callback(msg)
@@ -193,3 +197,91 @@ def test_reference_paths_are_separate_from_actual_and_admittance(node):
     assert pubs['path'].messages[-1].poses[-1].pose.position.x == 0.
     assert pubs['reference_path'].messages[-1].poses[-1].pose.position.x == 1.
     assert pubs['admittance_path'].messages[-1].poses[-1].pose.position.x == 4.
+
+
+def com_point(x=.025, y=-.015, z=1., frame='world'):
+    msg = ros.PointStamped()
+    msg.header.frame_id = frame
+    msg.point.x, msg.point.y, msg.point.z = x, y, z
+    return msg
+
+
+def test_payload_com_needs_both_actual_position_and_running_node_heartbeat(node):
+    node.on_payload_com(com_point())
+    node.tick()
+    assert 'payload/com' not in active_markers(node)
+    node.cache('payload', 'com_enabled', True)
+    node.tick()
+    marker = active_markers(node)['payload/com']
+    np.testing.assert_allclose([marker.pose.position.x, marker.pose.position.y,
+                               marker.pose.position.z], [.025, -.015, 1.])
+    assert marker.type == ros.Marker.SPHERE
+    assert not any(m.type == ros.Marker.TEXT_VIEW_FACING for m in active_markers(node).values())
+    node.on_payload_com(com_point(.02, .01, 1.2))
+    node.tick()
+    assert active_markers(node)['payload/com'].pose.position.z == 1.2
+    node.cache('payload', 'com_enabled', False)
+    node.tick()
+    assert 'payload/com' not in active_markers(node)
+    assert any(m.ns == 'payload/com' and m.action == ros.Marker.DELETE
+               for m in node.marker_pub.messages[-1].markers)
+
+
+def test_payload_com_disappears_if_node_stops_even_while_gt_keeps_publishing(node):
+    node.on_payload_com(com_point())
+    node.cache('payload', 'com_enabled', True)
+    node.tick()
+    node.time += node.cfg['feedback_timeout_s'] + .01
+    node.on_payload_com(com_point())  # Plant is alive; experiment node has died.
+    node.tick()
+    assert 'payload/com' not in active_markers(node)
+    assert any(m.ns == 'payload/com_cross' and m.action == ros.Marker.DELETE
+               for m in node.marker_pub.messages[-1].markers)
+    node.cache('payload', 'com_enabled', True)  # Restarting the experiment shows it again.
+    node.tick()
+    assert 'payload/com' in active_markers(node)
+
+
+def test_payload_com_rejects_stale_invalid_or_wrong_frame_ground_truth(node):
+    node.cache('payload', 'com_enabled', True)
+    node.tick()
+    assert 'payload/com' not in active_markers(node)
+    node.on_payload_com(com_point())
+    node.tick()
+    assert 'payload/com' in active_markers(node)
+    for msg in (com_point(x=math.nan), com_point(frame='payload')):
+        node.on_payload_com(msg)
+        node.tick()
+        assert 'payload/com' not in active_markers(node)
+    node.on_payload_com(com_point())
+    node.time += node.cfg['feedback_timeout_s'] + .01
+    node.cache('payload', 'com_enabled', True)  # Heartbeat alone cannot keep old position alive.
+    node.tick()
+    assert 'payload/com' not in active_markers(node)
+
+
+def test_payload_com_transparency_is_temporary_and_config_can_hide_it(node):
+    # Renderer receives the actual model part colors, never mutates cached geometry.
+    part = NS(marker_id=0, kind='box', position=np.zeros(3),
+              quaternion=[0., 0., 0., 1.], scale=[.4, .5, .5], rgba=(.7, .8, .7, 1.))
+    node.geometry = NS(parts=lambda role, servo: [part], unsupported=[])
+    msg = ros.Odometry()
+    msg.header.frame_id = 'world'
+    msg.pose.pose.orientation.w = 1.
+    node.on_odometry('payload', msg)
+    node.on_state('leader', state())
+    node.on_payload_com(com_point())
+    node.cache('payload', 'com_enabled', True)
+    node.tick()
+    markers = active_markers(node)
+    assert markers['payload/model'].color.a == node.cfg['payload_com_model_alpha']
+    assert markers['leader/model'].color.a == 1.
+    assert part.rgba[-1] == 1.
+    node.cache('payload', 'com_enabled', False)
+    node.tick()
+    assert active_markers(node)['payload/model'].color.a == 1.
+    node.cache('payload', 'com_enabled', True)
+    node.cfg['show_payload_com'] = False
+    node.tick()
+    assert 'payload/com' not in active_markers(node)
+    assert active_markers(node)['payload/model'].color.a == 1.

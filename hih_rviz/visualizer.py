@@ -8,7 +8,7 @@ from pathlib import Path as FilePath
 import numpy as np
 import rclpy
 from ament_index_python.packages import get_package_share_directory
-from geometry_msgs.msg import AccelStamped, PoseStamped, TransformStamped, Vector3Stamped, WrenchStamped
+from geometry_msgs.msg import AccelStamped, PointStamped, PoseStamped, TransformStamped, Vector3Stamped, WrenchStamped
 from hih_interfaces.msg import CenterOfPressure, Cmd, ContactDiagnostics, MinitroneState, Wrench
 from nav_msgs.msg import Odometry, Path
 from rcl_interfaces.msg import ParameterDescriptor
@@ -16,7 +16,7 @@ from rcl_interfaces.srv import GetParameters
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import JointState
-from std_msgs.msg import String
+from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
@@ -119,6 +119,9 @@ class HIHVisualizer(Node):
             lambda msg: self.cache('payload', 'contact', msg), qos_profile_sensor_data))
         self.wrench_pubs[('payload', 'contact')] = self.create_publisher(
             WrenchStamped, self.cfg['output_prefix'] + '/payload/wrench_contact', 2)
+        self._subscribe(PointStamped, 'payload_com_topic', 'payload', self.on_payload_com)
+        self._subscribe(Bool, 'payload_com_enabled_topic', 'payload',
+                        lambda msg: self.cache('payload', 'com_enabled', bool(msg.data)))
         self.clear_service = self.create_service(Trigger, '~/clear_history', self.clear_history)
         self.safety_timer = self.create_timer(self.cfg['safety_poll_period_s'], self.poll_boundaries)
         self.timer = self.create_timer(1. / self.cfg['publish_rate_hz'], self.tick)
@@ -128,11 +131,15 @@ class HIHVisualizer(Node):
         for key in ('publish_rate_hz', 'state_timeout_s', 'feedback_timeout_s',
                     'marker_lifetime_s', 'history_max_age_s', 'history_interval_s',
                     'safety_poll_period_s', 'max_arrow_length_m', 'velocity_scale',
-                    'acceleration_scale', 'angular_velocity_scale', 'force_scale', 'moment_scale'):
+                    'acceleration_scale', 'angular_velocity_scale', 'force_scale', 'moment_scale',
+                    'payload_com_diameter_m'):
             if not math.isfinite(self.cfg[key]) or self.cfg[key] <= 0.:
                 raise ValueError(key + ' must be finite and positive')
         if not isinstance(self.cfg['history_max_points'], int) or self.cfg['history_max_points'] < 2:
             raise ValueError('history_max_points must be an integer >= 2')
+        if (not math.isfinite(self.cfg['payload_com_model_alpha'])
+                or not 0. <= self.cfg['payload_com_model_alpha'] <= 1.):
+            raise ValueError('payload_com_model_alpha must be in [0, 1]')
         if self.cfg['drone_state_source'] not in ('measured', 'ground_truth'):
             raise ValueError('drone_state_source must be measured or ground_truth')
         if self.cfg['acceleration_mode'] not in ('body_specific_force', 'world_linear'):
@@ -230,6 +237,34 @@ class HIHVisualizer(Node):
     def cache(self, role, kind, msg):
         self.feedback[(role, kind)] = (msg, self.seconds())
 
+    def on_payload_com(self, msg):
+        try:
+            if msg.header.frame_id != self.cfg['world_frame']:
+                raise ValueError('COM frame must match world_frame')
+            position = finite_vector([msg.point.x, msg.point.y, msg.point.z])
+            self.cache('payload', 'com_position', position)
+        except ValueError:
+            self.feedback.pop(('payload', 'com_position'), None)
+            self.warn('payload_com', 'Invalid payload COM ignored')
+
+    def payload_com_position(self, now):
+        if (self.cfg['show_payload_com']
+                and self.fresh_feedback('payload', 'com_enabled', now) is True):
+            return self.fresh_feedback('payload', 'com_position', now)
+        return None
+
+    def draw_payload_com(self, marks, position):
+        color = (1., .1, .8, 1.)
+        diameter = self.cfg['payload_com_diameter_m']
+        marks.shape('payload/com', 0, Marker.SPHERE, position,
+                    [0., 0., 0., 1.], [diameter] * 3, color)
+        for axis in range(3):
+            offset = np.eye(3)[axis] * diameter
+            marks.line('payload/com_cross', [position - offset, position + offset],
+                       color, width=.003, marker_id=axis)
+        if self.cfg['show_labels']:
+            marks.text('payload/com_text', position + [0., 0., 2.*diameter], 'CoM', color, .04)
+
     def on_command(self, role, kind, msg):
         try:
             self.commands[(role, kind)] = (finite_vector(msg.pos_cmd), self.seconds())
@@ -311,7 +346,7 @@ class HIHVisualizer(Node):
         key = {'actual': 'path', 'reference': 'reference_path', 'admittance': 'admittance_path'}[kind]
         self.publishers_by_role[role][key].publish(out)
 
-    def draw_body(self, marks, role, state, acc):
+    def draw_body(self, marks, role, state, acc, payload_com_active=False):
         pos, q, color = state.position, state.quaternion, COLORS[role]
         R = rotation(q)
         world = lambda local: pos + R @ np.asarray(local)
@@ -321,8 +356,11 @@ class HIHVisualizer(Node):
                 servo = cached[0] if cached and 0. <= self.seconds()-cached[1] <= self.cfg['state_timeout_s'] else None
                 kinds = {'box': Marker.CUBE, 'sphere': Marker.SPHERE, 'cylinder': Marker.CYLINDER}
                 for part in self.geometry.parts(role, servo):
+                    rgba = part.rgba
+                    if role == 'payload' and payload_com_active:
+                        rgba = (*rgba[:3], min(rgba[3], self.cfg['payload_com_model_alpha']))
                     marks.shape(role + '/model', part.marker_id, kinds[part.kind], world(part.position),
-                                multiply_quaternions(q, part.quaternion), part.scale, part.rgba)
+                                multiply_quaternions(q, part.quaternion), part.scale, rgba)
                 if self.geometry.unsupported:
                     self.warn('model_types', 'Unsupported MJCF geoms: ' + ', '.join(sorted(self.geometry.unsupported)))
         if self.cfg['show_axes']:
@@ -426,6 +464,7 @@ class HIHVisualizer(Node):
                 history.clear()
         self.last_tick_time = now
         marks = Markers(self.cfg['world_frame'], stamp, self.cfg['marker_lifetime_s'])
+        payload_com = self.payload_com_position(now)
         transforms, status = [], []
         for role in ROLES:
             state = self.states.get(role)
@@ -450,7 +489,7 @@ class HIHVisualizer(Node):
                                              state.position, state.quaternion, stamp))
             self.publish_state(role, state, stamp, acc)
             self.histories[(role, 'actual')].append(state.received, state.position, state.quaternion)
-            self.draw_body(marks, role, state, acc)
+            self.draw_body(marks, role, state, acc, payload_com_active=payload_com is not None)
             R = rotation(state.quaternion)
             if role != 'payload':
                 transforms.append(self.transform(self.frame(role), self.frame(role, 'contact'),
@@ -479,6 +518,8 @@ class HIHVisualizer(Node):
                                      state.position + R @ [x, 0., 0.], sensor_R, COLORS[drone], stamp, '')
             for kind in ('actual', 'reference', 'admittance'):
                 self.publish_path(role, kind, self.histories[(role, kind)], stamp)
+        if payload_com is not None:
+            self.draw_payload_com(marks, payload_com)
         if transforms:
             self.tf.sendTransform(transforms)
         status_text = ' | '.join(status)

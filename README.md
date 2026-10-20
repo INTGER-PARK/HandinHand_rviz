@@ -228,6 +228,26 @@ Fixed Frame은 기본 `world`입니다. Body frame으로 바꾸면 궤적을 해
 텍스트를 다시 표시하려면 `config/visualization.yaml`에서 `show_labels: true`로 바꾸고
 시각화 노드를 재시작하세요. `/hih_viz/status` 토픽으로도 상태를 확인할 수 있습니다.
 
+Payload의 실제 **COM은 `hih_payload_disturbance` 노드가 실행 중일 때만**
+자홍색 구와 십자로 자동 표시됩니다. `C` 입력 전이나 COM 이동을 일시정지한 상태에서도
+노드가 실행 중이면 현재 COM이 보이며, wind 노드만 실행한 경우에는 나타나지 않습니다.
+내부 COM이 가려지지 않도록 그동안 payload 모델의 표시 alpha를 기본 0.25로 낮춥니다.
+노드 종료 신호 또는 heartbeat/COM 위치의 수신 만료 시 마커를 지우고 원래 alpha를 복구합니다.
+강제 종료나 통신 단절 시 기본 최대 약 0.7초(`feedback_timeout_s`) 후 숨겨집니다.
+
+이 기능에는 업데이트한 **HandinHand_sim과 HandinHand_rviz 둘 다** 필요합니다.
+Simulator의 `hih_plant`와 이 workspace의 `hih_rviz`를 각각 rebuild/source하고 재실행하세요.
+실험 노드 실행법은 simulator의
+[README_DISTURBANCES_KR.md](https://github.com/INTGER-PARK/HandinHand_sim/blob/main/README_DISTURBANCES_KR.md)를 참고하세요.
+RViz에서 별도로 PointStamped display를 추가할 필요가 없습니다.
+
+COM 구는 실제 `/hih/ground_truth/payload/com`의 World 위치를 사용합니다.
+Body 중심이나 명령 offset으로 COM을 추정하지 않습니다.
+`show_payload_com: true`는 fresh COM과 실행 상태 신호가 있을 때만 표시를 허용한다는 뜻입니다.
+아예 숨기려면 false, 구 크기는 `payload_com_diameter_m`, 표시 중 상자 투명도는
+`payload_com_model_alpha`로 설정하세요. 수치/문자 라벨은 기존 `show_labels: false`를 따릅니다.
+모든 설정은 표시용이며 시뮬레이터의 물리 파라미터나 COM 명령에는 영향을 주지 않습니다.
+
 `model_xml_path`가 빈 문자열이면 source한 `hih_plant`의 `xml/Cooperation.xml`을 사용합니다.
 다른 MJCF를 사용하려면 이 값에 절대 경로를 지정하세요. 현재 body/joint 이름 규약은 유지해야 합니다.
 `model_geom_groups: [0, 1, 2]`는 MuJoCo viewer의 기본 표시 그룹과 같습니다.
@@ -265,6 +285,8 @@ ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'
 | `/{role}/minitrone/state` | hih_interfaces/MinitroneState | measured 드론 표시 |
 | `/hih/ground_truth/payload/odometry` | nav_msgs/Odometry | 업데이트한 원본 plant의 payload pose/twist |
 | `/hih/ground_truth/payload/acceleration` | geometry_msgs/AccelStamped | 업데이트한 원본 plant의 payload World 가속도 |
+| `/hih/ground_truth/payload/com` | geometry_msgs/PointStamped | 실제 COM World 위치, COM 표시용 선택 입력 |
+| `/hih/disturbance/payload/com_visualization_enabled` | std_msgs/Bool | payload disturbance 노드의 실행 heartbeat, true일 때만 COM 표시 |
 | `/hih/ground_truth/{role}/odometry` | nav_msgs/Odometry | drone GT 모드일 때 외부 입력 필요 |
 | `/hih/ground_truth/{role}/acceleration` | geometry_msgs/AccelStamped | 선택 drone GT 가속도; 외부 입력 필요 |
 | `/hih/ground_truth/{role}/joint_states` | sensor_msgs/JointState | GT 모드의 네 servo position [rad] |
