@@ -12,7 +12,7 @@ setup(
     ],
     install_requires=['setuptools', 'numpy', 'PyYAML'], zip_safe=True,
     maintainer='INTGER-PARK', maintainer_email='jjungsoo2022@gmail.com',
-    description='Read-only RViz2 visualization for an existing HandinHand_sim', license='MIT',
+    description='Read-only RViz2 visualization for an existing HIH_sim', license='MIT',
     tests_require=['pytest'],
     entry_points={'console_scripts': [
         'hih_visualizer = hih_rviz.visualizer:main',

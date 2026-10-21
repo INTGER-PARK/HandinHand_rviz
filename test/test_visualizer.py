@@ -66,8 +66,8 @@ def test_receiving_telemetry_only_publishes_visualization_and_reads_parameters(n
             msg = com_point()
         elif sub.cls is ros.Bool:
             msg = ros.Bool(data=True)
-        else:  # Optional contact diagnostic is not a command input.
-            continue
+        else:
+            pytest.fail('Unhandled visualization input: ' + sub.topic)
         sub.callback(msg)
     for client in node.clients:
         assert client.cls is ros.GetParameters

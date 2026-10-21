@@ -1,19 +1,14 @@
 # HandinHand RViz2 visualization (`hih_rviz`)
 
-HandinHand_sim의 **Leader · Follower · Payload** 상태와 접촉을 RViz2에서 확인하는
+HIH_sim의 **Leader · Follower · Payload** 상태와 접촉을 RViz2에서 확인하는
 별도 ROS 2 Python 패키지입니다. Ubuntu 22.04 / ROS 2 Humble을 대상으로 작성했습니다.
-드론 인터페이스 기준은 `INTGER-PARK/HandinHand_sim`의 **9b1e82e**입니다.
-Payload 전체 표시는 원본 simulator의 payload telemetry 추가 버전이 필요합니다.
+입력 인터페이스와 기체 모델은 [HIH_sim](https://github.com/INTGER-PARK/HIH_sim)을 기준으로 합니다.
 
 **이미 실행 중인 MuJoCo 시뮬레이터를 관찰하는 시각화 전용 패키지입니다.**
 기존 상태·명령·피드백을 구독하고 `/hih_viz/*`와 표시용 TF만 발행합니다.
 시뮬레이터, 제어기, admittance, allocator, observer, teleop, trajectory를 실행하지 않습니다.
 기존 position/attitude command, admittance enable, actuator input, 상태·힘 피드백 토픽에는
 발행하지 않으며, 원격 파라미터도 변경하지 않습니다. 기존 시뮬레이터 파일을 수정하지 않습니다.
-
-0.2.0부터 plant를 실행하던 `simulation.launch.py`/`hih_plant_telemetry`와 원본 입력 토픽에
-합성 데이터를 발행하던 `demo.launch.py`/`hih_visualization_demo`를 제거했습니다.
-실행 방법은 아래의 `visualization.launch.py` 하나입니다.
 
 ## 1. 무엇을 볼 수 있나요?
 
@@ -28,18 +23,16 @@ Payload 전체 표시는 원본 simulator의 payload telemetry 추가 버전이 
 | CoP | MoB 노란 점, Solver 청록 점; 각각 실제 판면에 표시 | 별도 payload CoP 추정기를 가정하지 않음 |
 | 판 경계 | 실제 판 외곽 + 실행 중인 CoP 제어기의 안전 경계 | 상자의 실제 외형 |
 | 힘·모멘트 | MoB 추정 렌치와 Solver 접촉 렌치 | 두 드론의 접촉 합력/모멘트와 각 면의 GT 렌치 |
-| solver 접촉점 | 기존 contact_diagnostics 입력이 있을 때 선택적으로 표시 | 두 드론 판에서 표시 |
 
-**업데이트한 원본 HandinHand_sim의 기존 `cooperation_plant`가 payload odometry와
+**HIH_sim의 `cooperation_plant`가 payload odometry와
 World acceleration을 기본 30 Hz로 발행합니다.** 이 패키지는 그 출력을 구독하여 payload의
 실제 3D 형상·위치·자세·선속도·선가속도·각속도·이동 궤적과 기존 접촉 렌치를 표시합니다.
 두 드론 사이의 중간점으로 상태를 가정하지 않습니다. 같은 MuJoCo 데이터의 실제 관측값입니다.
 RViz는 plant를 대체하거나 추가 실행하지 않습니다.
 
-원본 simulator는 [payload telemetry 설명](https://github.com/INTGER-PARK/HandinHand_sim/blob/main/README_PAYLOAD_RVIZ_KR.md)에
-따라 업데이트·재빌드하고, 기존 plant를 다시 시작해야 합니다. 구버전 plant 또는 telemetry OFF
-상태에서는 payload만 `waiting/stale`입니다. 이번 출력 추가는 drone GT/joint_states와
-contact_diagnostics 토픽을 제공하지 않습니다. 드론은 기본 `measured` 모드로 표시합니다.
+Simulator의 빌드·실행 방법은 [HIH_sim README](https://github.com/INTGER-PARK/HIH_sim#readme)를 참고하세요.
+Payload telemetry를 끄면 payload 상태는 `waiting/stale`로 표시됩니다.
+드론은 기본 `measured` 모드를 사용하며, 선택 drone GT 모드는 별도 GT 입력이 필요합니다.
 
 기체와 payload 형상은 **설치된 `hih_plant/xml/Cooperation.xml`을 직접 읽어 재사용**합니다.
 MuJoCo가 `Leader.xml` / `Follower.xml` / `contact_box.xml`의 include·재질·`fromto`·관절을
@@ -55,18 +48,18 @@ RViz 전용으로 따로 정한 기체 치수나 임의의 rotor 배치를 사�
 
 ## 2. 빌드
 
-먼저 기존 HandinHand_sim을 빌드하고, 그 시뮬레이터가 실행되는 Python/ROS 환경을 사용합니다.
+먼저 HIH_sim을 빌드하고, 그 시뮬레이터가 실행되는 Python/ROS 환경을 사용합니다.
 `hih_interfaces`를 이 저장소에 복제하거나 메시지 정의를 다시 작성할 필요는 없습니다.
-이 문서의 기존 workspace 경로는 본인의 경로에 맞게 변경하세요.
+아래 workspace 경로는 본인의 경로에 맞게 변경하세요.
 
-Payload 출력을 포함하도록 원본 simulator를 먼저 업데이트합니다.
+먼저 HIH_sim의 메시지와 plant를 함께 빌드합니다.
 
 ```bash
 source /opt/ros/humble/setup.bash
 sudo apt install ros-humble-nav-msgs ros-humble-geometry-msgs
-cd ~/ros2_project/HandinHand_sim
+cd ~/ros2_project/HIH_sim
 git pull --ff-only
-colcon build --symlink-install --packages-select hih_plant
+colcon build --symlink-install
 source install/setup.bash
 ```
 
@@ -74,7 +67,7 @@ source install/setup.bash
 
 ```bash
 source /opt/ros/humble/setup.bash
-source ~/ros2_project/HandinHand_sim/install/setup.bash
+source ~/ros2_project/HIH_sim/install/setup.bash
 
 sudo apt update
 sudo apt install ros-humble-rviz2 ros-humble-tf2-ros \
@@ -88,18 +81,26 @@ git clone https://github.com/INTGER-PARK/HandinHand_rviz.git
 
 cd ~/ros2_project/hih_visualization_ws
 colcon build --symlink-install --packages-select hih_rviz
-source install/setup.bash
+source install/local_setup.bash
 ```
 
-새 터미널에서도 `/opt/ros/humble`, 기존 simulator, visualization workspace 순서로 source합니다.
+새 터미널에서도 `/opt/ros/humble`, `HIH_sim/install/setup.bash`, visualization workspace의
+`install/local_setup.bash` 순서로 source합니다. `local_setup.bash`를 사용하면 RViz 빌드 때
+기록된 이전 simulator underlay를 다시 불러오는 일을 피할 수 있습니다.
 형상 로딩에는 기존 simulator의 MuJoCo Python 모듈과 `hih_plant` XML이 필요합니다.
 검증 버전은 MuJoCo 3.3.7입니다. 시뮬레이터가 이미 실행되는 동일 Python 환경을 사용하세요.
 시뮬레이터와 다른 컴퓨터라면 ROS_DOMAIN_ID, ROS_LOCALHOST_ONLY 및 DDS 네트워크 설정도 맞춥니다.
 
 ## 3. 실행: 기존 시뮬레이터에 붙이기
 
-HandinHand_sim의 기존 launch와 실험 설정을 그대로 사용합니다.
-새 터미널에서 기존 simulator와 visualization workspace를 source한 뒤 실행합니다.
+HIH_sim의 기존 launch와 실험 설정을 그대로 사용합니다.
+새 터미널에서 다음 순서로 실행합니다.
+
+```bash
+source /opt/ros/humble/setup.bash
+source ~/ros2_project/HIH_sim/install/setup.bash
+source ~/ros2_project/hih_visualization_ws/install/local_setup.bash
+```
 
 ```bash
 ros2 launch hih_rviz visualization.launch.py
@@ -228,19 +229,19 @@ ros2 launch hih_rviz visualization.launch.py config:=/absolute/path/my_visualiza
 | `leader/model`, `follower/model`, `payload/model` | ON |
 | TF (`Body and contact frames`) | ON; frame 이름 문자는 OFF |
 | 세 물체의 actual Path, Leader/Follower reference Path, Follower admittance Path | ON |
-| 속도·가속도·각속도, 추정/접촉 렌치, CoP, 판/안전 경계, 접촉점 | OFF |
+| 속도·가속도·각속도, 추정/접촉 렌치, CoP, 판/안전 경계 | OFF |
 | 상태/수치/legend 문자, COM 구·십자·문자, World grid | OFF |
 
 직접 켜려면 RViz 왼쪽 **Displays → Bodies - vectors - CoP - contact → Namespaces**를 펼쳐
 원하는 namespace만 체크하세요. 예를 들어 `leader/cop_mob`, `follower/contact_force`,
 `payload/com`을 개별로 선택할 수 있습니다. TF, Path와 grid는 각각의 Display 체크를 사용합니다.
-늦게 데이터가 들어오는 CoP·COM·접촉점도 미리 저장된 기본 OFF 설정을 따릅니다.
+늦게 데이터가 들어오는 CoP·COM도 미리 저장된 기본 OFF 설정을 따릅니다.
 해당 데이터가 아직 없거나 invalid이면 namespace/마커는 데이터가 유효해질 때 나타납니다.
 업데이트한 기본 체크 상태를 적용하려면 **RViz 창도 다시 실행**하세요.
 시각화 노드만 재시작하면 이미 열려 있는 RViz 창의 수동 체크 상태는 유지됩니다.
 
 수동 체크로 바로 켤 수 있도록 기본 YAML의 `show_*` 플래그는 마커 **발행을 허용**합니다.
-특히 `show_labels: true`와 `show_contact_points: true`여도 기본 화면에서는 namespace 체크가 OFF입니다.
+예를 들어 `show_labels: true`여도 기본 화면에서는 namespace 체크가 OFF입니다.
 사용자 YAML에서 이 값을 false로 바꾸면 해당 마커 발행이 중단되므로 체크만으로 표시할 수 없습니다.
 Fixed Frame은 기본 `world`입니다. Body frame으로 바꾸면 궤적을 해석하기 어려워집니다.
 상태 문자는 `*/state`, CoP 문자는 `*/cop_*_text`, 렌치 수치는 `*/*_wrench`,
@@ -254,10 +255,10 @@ Payload의 실제 **COM 마커는 `hih_payload_disturbance` 노드가 실행 중
 노드 종료 신호 또는 heartbeat/COM 위치의 수신 만료 시 마커를 지우고 원래 alpha를 복구합니다.
 강제 종료나 통신 단절 시 기본 최대 약 0.7초(`feedback_timeout_s`) 후 숨겨집니다.
 
-이 기능에는 업데이트한 **HandinHand_sim과 HandinHand_rviz 둘 다** 필요합니다.
+이 기능에는 업데이트한 **HIH_sim과 HandinHand_rviz 둘 다** 필요합니다.
 Simulator의 `hih_plant`와 이 workspace의 `hih_rviz`를 각각 rebuild/source하고 재실행하세요.
 실험 노드 실행법은 simulator의
-[README_DISTURBANCES_KR.md](https://github.com/INTGER-PARK/HandinHand_sim/blob/main/README_DISTURBANCES_KR.md)를 참고하세요.
+[HIH_sim README](https://github.com/INTGER-PARK/HIH_sim#readme)를 참고하세요.
 RViz에서 별도로 PointStamped display를 추가할 필요가 없습니다.
 
 COM 구는 실제 `/hih/ground_truth/payload/com`의 World 위치를 사용합니다.
@@ -316,7 +317,6 @@ ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'
 | `/{role}/minitrone/cop_solver_real` | hih_interfaces/CenterOfPressure | Solver CoP, 선택 |
 | `/{role}/minitrone/external_wrench_hat_second_order` | hih_interfaces/Wrench | 추정 렌치, 선택 |
 | `/{role}/minitrone/contact_wrench_real` | hih_interfaces/Wrench | Solver 렌치, 선택 |
-| `/{role}/minitrone/contact_diagnostics` | hih_interfaces/ContactDiagnostics | 선택 접촉점; 외부 입력 필요 |
 | `/payload/contact_wrench_from_drones` | hih_interfaces/Wrench | payload 접촉 합력, 선택 |
 | `/payload/contact_wrench_from_{role}` | hih_interfaces/Wrench | payload 각 면 렌치, 선택 |
 
@@ -335,7 +335,7 @@ ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'
 | `/tf` | world → hih_viz/{body}/base_link → drone contact/plate_center |
 
 이 패키지는 위 구독 입력을 발행하지 않습니다. Payload GT는 원본 plant가 출력하며,
-선택 drone GT/contact diagnostics를 제공하는 publisher가 없으면 해당 항목은 표시하지 않습니다.
+선택 drone GT를 제공하는 publisher가 없으면 해당 GT 항목은 표시하지 않습니다.
 이 표의 경로는 미래의 전체 planned trajectory가 아니라 지금까지 발행된 명령의 이력입니다.
 controller 내부에서 합산되는 모든 CoP/attitude offset을 포함한 최종 desired pose라고 가정하지 않습니다.
 
@@ -427,23 +427,19 @@ MuJoCo가 없으면 그 라이브러리를 사용하는 검사만 skip합니다.
 ## 11. 저장소와 업데이트
 
 이 패키지는 https://github.com/INTGER-PARK/HandinHand_rviz 에서 별도로 관리합니다.
-기존 `HandinHand_sim`과 독립된 저장소이며, simulator 설정 변경을 자동으로 가져오지 않습니다.
+`HIH_sim`과 별도로 관리하며, simulator 설정 변경을 자동으로 가져오지 않습니다.
 
 ```bash
 cd ~/ros2_project/hih_visualization_ws/src/HandinHand_rviz
 git pull --ff-only
 cd ~/ros2_project/hih_visualization_ws
-# 0.1.0을 설치한 적이 있다면 별도 visualization workspace의 기존 설치 산출물을
-# 먼저 제거합니다. 아래 두 경로는 기본 isolated install 기준이며 소스 폴더가 아닙니다.
-rm -rf build/hih_rviz install/hih_rviz
 colcon build --symlink-install --packages-select hih_rviz
-source install/setup.bash
+source install/local_setup.bash
 ```
 
 시뮬레이터 메시지·XML·좌표계가 변경되면 이 패키지의 입력 규약과 YAML도 확인하세요.
-Payload 표시를 추가하려면 원본 simulator도 2번 안내대로 업데이트·재빌드하고 plant를 재시작하세요.
-기존 `simulation.launch.py`/`demo.launch.py`를 실행 중이었다면 해당 프로세스를 종료하고,
-원래 HandinHand_sim launch를 실행한 뒤 `visualization.launch.py`만 추가로 실행하세요.
+HIH_sim도 함께 업데이트했다면 메시지·모델을 rebuild/source한 뒤 두 프로세스를 재시작합니다.
+실행은 HIH_sim의 `cooperation_launch.py`와 이 패키지의 `visualization.launch.py`를 사용합니다.
 
 ## 참고
 

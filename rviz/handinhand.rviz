@@ -25,7 +25,6 @@ Visualization Manager:
         follower/axes: false
         follower/contact_force: false
         follower/contact_moment: false
-        follower/contact_points: false
         follower/contact_wrench: false
         follower/cop_mob: false
         follower/cop_mob_text: false
@@ -46,7 +45,6 @@ Visualization Manager:
         leader/axes: false
         leader/contact_force: false
         leader/contact_moment: false
-        leader/contact_points: false
         leader/contact_wrench: false
         leader/cop_mob: false
         leader/cop_mob_text: false

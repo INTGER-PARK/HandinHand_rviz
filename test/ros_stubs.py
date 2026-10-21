@@ -219,7 +219,7 @@ def install(monkeypatch):
         'tf2_ros': {'TransformBroadcaster': TransformBroadcaster},
         'visualization_msgs.msg': {'Marker': Marker, 'MarkerArray': Msg},
         'hih_interfaces.msg': {'MinitroneState': MinitroneState, 'Cmd': Cmd, 'Wrench': Wrench,
-                               'CenterOfPressure': CenterOfPressure, 'ContactDiagnostics': Msg},
+                               'CenterOfPressure': CenterOfPressure},
         'ament_index_python.packages': {
             'get_package_share_directory': lambda package: str(FilePath(__file__).resolve().parents[1])},
     }

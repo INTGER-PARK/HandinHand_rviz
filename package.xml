@@ -2,7 +2,7 @@
 <package format="3">
   <name>hih_rviz</name>
   <version>0.2.0</version>
-  <description>Read-only RViz2 visualization of an already running HandinHand_sim.</description>
+  <description>Read-only RViz2 visualization of an already running HIH_sim.</description>
   <maintainer email="jjungsoo2022@gmail.com">INTGER-PARK</maintainer>
   <license>MIT</license>
   <buildtool_depend>ament_python</buildtool_depend>

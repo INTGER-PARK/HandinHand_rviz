@@ -26,7 +26,6 @@ hih_rviz:
     cop_solver_topic_template: /{role}/minitrone/cop_solver_real
     estimated_wrench_topic_template: /{role}/minitrone/external_wrench_hat_second_order
     contact_wrench_topic_template: /{role}/minitrone/contact_wrench_real
-    contact_diagnostics_topic_template: /{role}/minitrone/contact_diagnostics
     payload_wrench_topic: /payload/contact_wrench_from_drones
     payload_face_wrench_topic_template: /payload/contact_wrench_from_{role}
     cop_attitude_node_template: /{role}/{role}_cop_attitude_controller
@@ -35,7 +34,7 @@ hih_rviz:
     # Zero hides a manual boundary. Prefer the live controller parameters above.
     manual_safety_half_y_m: 0.0
     manual_safety_half_z_m: 0.0
-    # CoP/wrench OVERLAY frame snapshot: HandinHand_sim 9b1e82e.
+    # CoP/wrench overlay frames match the HIH_sim observer/contact interface.
     # These do not define the drone model: model geometry comes from MJCF below.
     # Match these to observer/contact frames if the simulator's XML offsets change.
     plate_center_body_m: [0.212, 0.0, 0.0]
@@ -71,4 +70,3 @@ hih_rviz:
     show_kinematics: true
     show_estimated_wrench: true
     show_contact_wrench: true
-    show_contact_points: true  # Available diagnostics only; RViz namespace starts OFF.

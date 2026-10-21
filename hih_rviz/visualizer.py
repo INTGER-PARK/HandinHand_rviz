@@ -9,7 +9,7 @@ import numpy as np
 import rclpy
 from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import AccelStamped, PointStamped, PoseStamped, TransformStamped, Vector3Stamped, WrenchStamped
-from hih_interfaces.msg import CenterOfPressure, Cmd, ContactDiagnostics, MinitroneState, Wrench
+from hih_interfaces.msg import CenterOfPressure, Cmd, MinitroneState, Wrench
 from nav_msgs.msg import Odometry, Path
 from rcl_interfaces.msg import ParameterDescriptor
 from rcl_interfaces.srv import GetParameters
@@ -105,8 +105,6 @@ class HIHVisualizer(Node):
                     ('admittance_command_topic_template', 'admittance')):
                 self._subscribe(Cmd, parameter, role,
                                 lambda msg, r=role, k=kind: self.on_command(r, k, msg))
-            self._subscribe(ContactDiagnostics, 'contact_diagnostics_topic_template', role,
-                            lambda msg, r=role: self.cache(r, 'contacts', msg))
             self._subscribe(Wrench, 'payload_face_wrench_topic_template', role,
                             lambda msg, r=role: self.cache('payload', r, msg))
             for kind in ('attitude', 'translation'):
@@ -410,23 +408,6 @@ class HIHVisualizer(Node):
             if self.cfg['show_labels']:
                 marks.text(role + '/' + kind + '_text', position + [0., 0., .04],
                            f'{kind}: y={msg.y:+.3f} z={msg.z:+.3f} m Fn={msg.normal_force:.2f} N', color, .032)
-        if self.cfg['show_contact_points']:
-            msg = self.fresh_feedback(role, 'contacts', now)
-            if msg is not None:
-                # Diagnostics origin is plate GEOM center (.212), not CoP face (.215).
-                R = rotation(state.quaternion)
-                origin = state.position + R @ np.asarray(self.cfg['plate_center_body_m'])
-                count = min(int(msg.stored_contact_count), len(msg.contact_pos_x))
-                for i in range(count):
-                    if msg.efc_address[i] < 0 or msg.normal_force[i] <= 0.:
-                        continue
-                    local = [msg.contact_pos_x[i], msg.contact_pos_y[i], msg.contact_pos_z[i]]
-                    try:
-                        p = origin + R @ finite_vector(local)
-                    except ValueError:
-                        continue
-                    marks.shape(role + '/contact_points', i, Marker.SPHERE, p, [0., 0., 0., 1.],
-                                [.012, .012, .012], (1., .4, .7, 1.))
 
     def draw_wrench(self, marks, role, kind, msg, origin, R, color, stamp, frame):
         if msg is None:
