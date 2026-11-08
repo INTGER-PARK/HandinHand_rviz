@@ -20,7 +20,7 @@ hih_rviz:
     # This package never starts a plant or exports its GT.
     ground_truth_odom_topic_template: /hih/ground_truth/{role}/odometry
     ground_truth_acceleration_topic_template: /hih/ground_truth/{role}/acceleration
-    command_topic_template: /{role}/minitrone/cmd
+    command_topic_template: /{role}/minitrone/pos_ref
     admittance_command_topic_template: /{role}/minitrone/cmd_admittance
     cop_mob_topic_template: /{role}/minitrone/cop_hat
     cop_solver_topic_template: /{role}/minitrone/cop_solver_real
