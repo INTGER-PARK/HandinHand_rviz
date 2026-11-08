@@ -19,7 +19,7 @@ HIH_sim의 **Leader · Follower · Payload** 상태와 접촉을 RViz2에서 확
 | 선가속도 | IMU specific force를 World 선가속도로 변환 또는 World 입력 사용 | 원본 plant가 World 속도를 simulation time으로 차분한 값 |
 | 각속도 | Body 수치 + World로 회전한 화살표 | Body 수치 + World 화살표 |
 | 실제 궤적 | 측정/GT 위치의 이력 | GT 위치의 이력 |
-| 명령 궤적 | upstream `cmd`와 `cmd_admittance`를 각각 분리 | payload 목표 명령을 가정하지 않음 |
+| 명령 궤적 | upstream `pos_ref`와 `cmd_admittance`를 각각 분리 | payload 목표 명령을 가정하지 않음 |
 | CoP | MoB 노란 점, Solver 청록 점; 각각 실제 판면에 표시 | 별도 payload CoP 추정기를 가정하지 않음 |
 | 판 경계 | 실제 판 외곽 + 실행 중인 CoP 제어기의 안전 경계 | 상자의 실제 외형 |
 | 힘·모멘트 | MoB 추정 렌치와 Solver 접촉 렌치 | 두 드론의 접촉 합력/모멘트와 각 면의 GT 렌치 |
@@ -136,7 +136,7 @@ ros2 launch hih_rviz visualization.launch.py drone_state_source:=ground_truth
 
 ## 4. 시각화가 제어에 개입하지 않는지 확인
 
-`cmd`/`cmd_admittance`는 **구독만** 하며, 받은 위치를 표시용 Path로 변환합니다.
+`pos_ref`/`cmd_admittance`는 **구독만** 하며, 받은 위치를 표시용 Path로 변환합니다.
 표시 설정·화살표 길이 제한·이력 삭제는 시각화 내부에만 적용됩니다.
 안전 경계는 CoP 제어 노드의 `/get_parameters` 서비스로 `safe_y_m`/`safe_z_m`만 조회합니다.
 `SetParameters` client나 enable/명령/actuator publisher를 만들지 않습니다.
@@ -145,9 +145,15 @@ ros2 launch hih_rviz visualization.launch.py drone_state_source:=ground_truth
 
 ```bash
 ros2 node info /hih_rviz
-ros2 topic info /follower/minitrone/cmd --verbose
+ros2 topic info /follower/minitrone/pos_ref --verbose
 ros2 topic info /follower/minitrone/cmd_admittance --verbose
-ros2 topic info /leader/minitrone/cmd --verbose
+ros2 topic info /leader/minitrone/pos_ref --verbose
+```
+
+이전 시뮬레이터나 `/cmd`로 기록한 rosbag을 표시할 때는 위치 토픽을 지정하세요.
+
+```bash
+ros2 launch hih_rviz visualization.launch.py command_topic_template:='/{role}/minitrone/cmd'
 ```
 
 위 명령에서 `hih_rviz`는 command의 **SUBSCRIPTION** 항목에만 나타나야 합니다.
@@ -311,7 +317,7 @@ ros2 service call /hih_rviz/clear_history std_srvs/srv/Trigger '{}'
 | `/hih/ground_truth/{role}/odometry` | nav_msgs/Odometry | drone GT 모드일 때 외부 입력 필요 |
 | `/hih/ground_truth/{role}/acceleration` | geometry_msgs/AccelStamped | 선택 drone GT 가속도; 외부 입력 필요 |
 | `/hih/ground_truth/{role}/joint_states` | sensor_msgs/JointState | GT 모드의 네 servo position [rad] |
-| `/{role}/minitrone/cmd` | hih_interfaces/Cmd | upstream 경로, 선택 |
+| `/{role}/minitrone/pos_ref` | hih_interfaces/Cmd | upstream 경로, 선택 |
 | `/{role}/minitrone/cmd_admittance` | hih_interfaces/Cmd | admittance 출력 경로, 선택 |
 | `/{role}/minitrone/cop_hat` | hih_interfaces/CenterOfPressure | MoB CoP, 선택 |
 | `/{role}/minitrone/cop_solver_real` | hih_interfaces/CenterOfPressure | Solver CoP, 선택 |
@@ -359,7 +365,7 @@ ros2 bag record -o hih_rviz_run \
   /leader/minitrone/external_wrench_hat_second_order \
   /follower/minitrone/external_wrench_hat_second_order \
   /leader/minitrone/contact_wrench_real /follower/minitrone/contact_wrench_real \
-  /leader/minitrone/cmd /follower/minitrone/cmd \
+  /leader/minitrone/pos_ref /follower/minitrone/pos_ref \
   /payload/contact_wrench_from_drones
 
 # 실제 simulator를 종료한 뒤, 두 터미널에서:

@@ -10,7 +10,7 @@ from launch_ros.substitutions import FindPackageShare
 
 def visualizer_node(context):
     overrides = {'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool)}
-    for name in ('drone_state_source', 'acceleration_mode'):
+    for name in ('drone_state_source', 'acceleration_mode', 'command_topic_template'):
         value = LaunchConfiguration(name).perform(context)
         if value:
             overrides[name] = value
@@ -27,6 +27,7 @@ def generate_launch_description():
         # Empty means use this value from config, including a custom YAML file.
         DeclareLaunchArgument('drone_state_source', default_value=''),
         DeclareLaunchArgument('acceleration_mode', default_value=''),
+        DeclareLaunchArgument('command_topic_template', default_value=''),
         OpaqueFunction(function=visualizer_node),
         Node(package='rviz2', executable='rviz2', condition=IfCondition(LaunchConfiguration('rviz')),
              arguments=['-d', PathJoinSubstitution([share, 'rviz', 'handinhand.rviz'])],

@@ -37,8 +37,9 @@ def test_attach_without_payload_never_invents_a_payload_pose(node):
 
 def test_outputs_never_command_a_vehicle(node):
     assert all(topic.startswith('/hih_viz/') for topic in node.publishers)
-    assert all(not topic.endswith(('/cmd', '/input', '/admittance_enable')) for topic in node.publishers)
+    assert all(not topic.endswith(('/pos_ref', '/cmd', '/input', '/admittance_enable')) for topic in node.publishers)
     inputs = {sub.topic for sub in node.subscriptions}
+    assert {'/leader/minitrone/pos_ref', '/follower/minitrone/pos_ref'} <= inputs
     assert inputs.isdisjoint(node.publishers)
     assert not any(pub.cls in (ros.Cmd, ros.MinitroneState, ros.Wrench, ros.CenterOfPressure)
                    for pub in node.publishers.values())
